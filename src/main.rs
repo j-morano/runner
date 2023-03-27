@@ -9,8 +9,20 @@ fn main() {
         println!("Usage: runner <command> <args>");
         return;
     }
-    let command = &args[1];
-    let command_args = &args[2..];
+    let command_args = &args[1..];
+
+    let mut dry_run = false;
+    let mut new_command_args = Vec::new();
+    for arg in command_args {
+        if arg == "--dry-run" {
+            dry_run = true;
+        }
+        else {
+            new_command_args.push(arg);
+        }
+    }
+    let command_args = new_command_args;
+    let command = &command_args[0];
 
     let mut multi_args = HashMap::new();
     let mut i = 0;
@@ -44,17 +56,31 @@ fn main() {
     let mut combinations = Vec::new();
     for (key, value) in &multi_args {
         if combinations.len() == 0 {
-            for arg in value {
-                combinations.push(vec![(*key, *arg)]);
+            if value.len() == 0 {
+                combinations.push(vec![(*key, "")]);
+            }
+            else {
+                for arg in value {
+                    combinations.push(vec![(*key, *arg)]);
+                }
             }
         }
         else {
             let mut new_combinations = Vec::new();
-            for arg in value {
+            if value.len() == 0 {
                 for combination in &combinations {
                     let mut new_combination = combination.clone();
-                    new_combination.push((*key, *arg));
+                    new_combination.push((*key, ""));
                     new_combinations.push(new_combination);
+                }
+            }
+            else {
+                for arg in value {
+                    for combination in &combinations {
+                        let mut new_combination = combination.clone();
+                        new_combination.push((*key, *arg));
+                        new_combinations.push(new_combination);
+                    }
                 }
             }
             combinations = new_combinations;
@@ -66,16 +92,29 @@ fn main() {
     }
     for combination in &combinations {
         println!("{}", "-".repeat(80));
-        println!("Running with args: {:?}", combination);
         let mut command = Command::new(&command);
         for (key, value) in combination {
-            command.arg(key).arg(value);
+            command.arg(key);
+            if !value.is_empty() {
+                command.arg(value);
+            }
         }
-        let mut child = command
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .expect("failed to execute process");
-        child.wait().expect("failed to wait on child");
+        // Print the command that will be executed without the quotes.
+        print!("$ {} ", command.get_program().to_str().unwrap());
+        for arg in command.get_args() {
+            print!("{} ", arg.to_str().unwrap());
+        }
+        println!();
+        if dry_run {
+            continue;
+        }
+        else {
+            let mut child = command
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .spawn()
+                .expect("failed to execute process");
+            child.wait().expect("failed to wait on child");
+        }
     }
 }
