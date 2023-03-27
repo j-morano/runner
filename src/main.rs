@@ -136,6 +136,7 @@ fn main() {
         println!("Running command without arguments.");
         combinations.push(vec![]);
     }
+    let mut commands_run = 0;
     for combination in &combinations {
         println!("{}", "-".repeat(80));
         let mut command_obj = Command::new(&command[0]);
@@ -164,6 +165,8 @@ fn main() {
                 .spawn()
                 .expect("failed to execute process");
             child.wait().expect("failed to wait on child");
+            commands_run += 1;
         }
     }
+    println!("{} commands run.", commands_run);
 }
