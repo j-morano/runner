@@ -48,7 +48,7 @@ fn main() {
         }
     }
     let command_args = new_command_args;
-    let mut command = String::new();
+    let mut command = Vec::new();
     // The command is the string before the first argument that starts with a
     // dash.
     let mut i = 0;
@@ -56,16 +56,8 @@ fn main() {
         if command_args[i].starts_with("-") {
             break;
         }
-        else {
-            // Join the command with a space.
-            if command.is_empty() {
-                command = command_args[i].to_string();
-            }
-            else {
-                command = format!("{} {}", command, command_args[i]);
-            }
-            i += 1;
-        }
+        command.push(&command_args[i]);
+        i += 1;
     }
     let command_args = &command_args[i..];
 
@@ -90,7 +82,11 @@ fn main() {
         i += 1;
     }
 
-    println!("Command: {}", command);
+    // Print the command that will be executed.
+    print!("$ ");
+    for arg in &command {
+        print!("{} ", arg);
+    }
     println!("Args:");
     // Pretty print multi_args HashMap.
     for (key, value) in &multi_args {
@@ -142,16 +138,19 @@ fn main() {
     }
     for combination in &combinations {
         println!("{}", "-".repeat(80));
-        let mut command = Command::new(&command);
+        let mut command_obj = Command::new(&command[0]);
+        for arg in &command[1..] {
+            command_obj.arg(arg);
+        }
         for (key, value) in combination {
-            command.arg(key);
+            command_obj.arg(key);
             if !value.is_empty() {
-                command.arg(value);
+                command_obj.arg(value);
             }
         }
         // Print the command that will be executed without the quotes.
-        print!("$ {} ", command.get_program().to_str().unwrap());
-        for arg in command.get_args() {
+        print!("$ {} ", command_obj.get_program().to_str().unwrap());
+        for arg in command_obj.get_args() {
             print!("{} ", arg.to_str().unwrap());
         }
         println!();
@@ -159,7 +158,7 @@ fn main() {
             continue;
         }
         else {
-            let mut child = command
+            let mut child = command_obj
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .spawn()
