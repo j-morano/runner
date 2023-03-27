@@ -3,18 +3,44 @@ use std::collections::HashMap;
 use std::process::{Command, Stdio};
 
 
+const HELP: &str = "\
+Usage: runner [option] <command> <args>
+Options:
+    -h, --help      Print this help message.
+    -v, --version   Print the version of runner.
+    --dry-runner    Print the commands that would be executed without actually
+                    executing them.\
+";
+
+
+fn print_version() {
+    // Get the version from Cargo.toml.
+    let version = env!("CARGO_PKG_VERSION");
+    println!("runner {}", version);
+}
+
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        println!("Usage: runner <command> <args>");
+        println!("{}", HELP);
         return;
     }
+    if args[1] == "-v" || args[1] == "--version" {
+        print_version();
+        return;
+    }
+    else if args[1] == "-h" || args[1] == "--help" {
+        println!("{}", HELP);
+        return;
+    }
+
     let command_args = &args[1..];
 
     let mut dry_run = false;
     let mut new_command_args = Vec::new();
     for arg in command_args {
-        if arg == "--dry-run" {
+        if arg == "--dry-runner" {
             dry_run = true;
         }
         else {
@@ -108,6 +134,11 @@ fn main() {
     println!("Combinations:");
     for combination in &combinations {
         println!("{:?}", combination);
+    }
+    if combinations.len() == 0 {
+        // Just run the command without any arguments.
+        println!("Running command without arguments.");
+        combinations.push(vec![]);
     }
     for combination in &combinations {
         println!("{}", "-".repeat(80));
