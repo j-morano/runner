@@ -22,7 +22,26 @@ fn main() {
         }
     }
     let command_args = new_command_args;
-    let command = &command_args[0];
+    let mut command = String::new();
+    // The command is the string before the first argument that starts with a
+    // dash.
+    let mut i = 0;
+    while i<command_args.len() {
+        if command_args[i].starts_with("-") {
+            break;
+        }
+        else {
+            // Join the command with a space.
+            if command.is_empty() {
+                command = command_args[i].to_string();
+            }
+            else {
+                command = format!("{} {}", command, command_args[i]);
+            }
+            i += 1;
+        }
+    }
+    let command_args = &command_args[i..];
 
     let mut multi_args = HashMap::new();
     let mut i = 0;
