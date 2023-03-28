@@ -1,6 +1,6 @@
 use std::env;
 use std::collections::HashMap;
-use std::process::{Command, Stdio};
+use std::process::{Command, Stdio, Child};
 
 
 const HELP: &str = "\
@@ -9,7 +9,8 @@ Options:
     -h, --help      Print this help message.
     -v, --version   Print the version of runner.
     --dry-runner    Print the commands that would be executed without actually
-                    executing them.\
+                    executing them.
+    --runners       Number of commands to run in parallel.\
 ";
 
 
@@ -22,6 +23,8 @@ fn print_version() {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+    let mut runners = 1;
+    let mut command_start = 1;
     if args.len() < 2 {
         println!("{}", HELP);
         return;
@@ -34,8 +37,21 @@ fn main() {
         println!("{}", HELP);
         return;
     }
+    else if args[1] == "--runners" {
+        if args.len() < 3 {
+            println!("Error: --runners requires an argument.");
+            return;
+        }
+        runners = args[2].parse().expect("Error: --runners requires an integer argument.");
+        if runners < 1 {
+            println!("Error: --runners requires an integer argument greater than 0.");
+            return;
+        }
+        println!("Parallel runners: {}.", runners);
+        command_start = 3;
+    }
 
-    let command_args = &args[1..];
+    let command_args = &args[command_start..];
 
     let mut dry_run = false;
     let mut new_command_args = Vec::new();
@@ -137,8 +153,9 @@ fn main() {
         combinations.push(vec![]);
     }
     let mut commands_run = 0;
+    // Array of commands that are currently running.
+    let mut running_commands = Vec::new();
     for combination in &combinations {
-        println!("{}", "-".repeat(80));
         let mut command_obj = Command::new(&command[0]);
         for arg in &command[1..] {
             command_obj.arg(arg);
@@ -149,23 +166,49 @@ fn main() {
                 command_obj.arg(value);
             }
         }
-        // Print the command that will be executed without the quotes.
-        print!("$ {} ", command_obj.get_program().to_str().unwrap());
-        for arg in command_obj.get_args() {
-            print!("{} ", arg.to_str().unwrap());
-        }
         println!();
         if dry_run {
             continue;
         }
         else {
-            let mut child = command_obj
+            if running_commands.len() >= runners {
+                // Wait for a command to finish.
+                let mut child: Child = running_commands.remove(0);
+                //https://doc.rust-lang.org/std/process/struct.Child.html
+                match child.try_wait() {
+                    Ok(Some(status)) => println!("exited with: {status}"),
+                    Ok(None) => {
+                        println!("status not ready yet, let's really wait");
+                        let res = child.wait();
+                        println!("result: {res:?}");
+                    }
+                    Err(e) => println!("error attempting to wait: {e}"),
+                }
+            }
+            // Print the command that will be executed without the quotes.
+            println!("{}", "-".repeat(80));
+            print!("$ {} ", command_obj.get_program().to_str().unwrap());
+            for arg in command_obj.get_args() {
+                print!("{} ", arg.to_str().unwrap());
+            }
+            let child = command_obj
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .spawn()
                 .expect("failed to execute process");
-            child.wait().expect("failed to wait on child");
+            running_commands.push(child);
             commands_run += 1;
+        }
+    }
+    for mut child in running_commands {
+        match child.try_wait() {
+            Ok(Some(status)) => println!("exited with: {status}"),
+            Ok(None) => {
+                println!("status not ready yet, let's really wait");
+                let res = child.wait();
+                println!("result: {res:?}");
+            }
+            Err(e) => println!("error attempting to wait: {e}"),
         }
     }
     println!("{} commands run.", commands_run);
