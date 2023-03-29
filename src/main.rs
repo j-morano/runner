@@ -69,7 +69,9 @@ fn main() {
     // dash.
     let mut i = 0;
     while i<command_args.len() {
-        if command_args[i].starts_with("-") {
+        // Check if command argument is equal to "--".
+        if command_args[i] == "--" {
+            i += 1;
             break;
         }
         command.push(&command_args[i]);
