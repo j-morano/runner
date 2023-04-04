@@ -6,6 +6,7 @@ use std::process::{Command, Stdio, Child};
 const HELP: &str = "\
 Usage: runner [option] <command> <args>
 Options:
+    --bg-runner     Run the commands in the background.
     -h, --help      Print this help message.
     -v, --version   Print the version of runner.
     --dry-runner    Print the commands that would be executed without actually
@@ -18,6 +19,19 @@ fn print_version() {
     // Get the version from Cargo.toml.
     let version = env!("CARGO_PKG_VERSION");
     println!("runner {}", version);
+}
+
+
+fn wait_for_child(child: &mut Child) {
+    match child.try_wait() {
+        Ok(Some(status)) => println!("exited with: {status}"),
+        Ok(None) => {
+            println!("status not ready yet, let's really wait");
+            let res = child.wait();
+            println!("result: {res:?}");
+        }
+        Err(e) => println!("error attempting to wait: {e}"),
+    }
 }
 
 
@@ -54,10 +68,14 @@ fn main() {
     let command_args = &args[command_start..];
 
     let mut dry_run = false;
+    let mut bg_run = false;
     let mut new_command_args = Vec::new();
     for arg in command_args {
         if arg == "--dry-runner" {
             dry_run = true;
+        }
+        else if arg == "--bg-runner" {
+            bg_run = true;
         }
         else {
             new_command_args.push(arg);
@@ -177,15 +195,7 @@ fn main() {
                 // Wait for a command to finish.
                 let mut child: Child = running_commands.remove(0);
                 //https://doc.rust-lang.org/std/process/struct.Child.html
-                match child.try_wait() {
-                    Ok(Some(status)) => println!("exited with: {status}"),
-                    Ok(None) => {
-                        println!("status not ready yet, let's really wait");
-                        let res = child.wait();
-                        println!("result: {res:?}");
-                    }
-                    Err(e) => println!("error attempting to wait: {e}"),
-                }
+                wait_for_child(&mut child);
             }
             // Print the command that will be executed without the quotes.
             println!("{}", "-".repeat(80));
@@ -193,25 +203,21 @@ fn main() {
             for arg in command_obj.get_args() {
                 print!("{} ", arg.to_str().unwrap());
             }
+            println!();
             let child = command_obj
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .spawn()
                 .expect("failed to execute process");
+            // Run command detached
             running_commands.push(child);
             commands_run += 1;
         }
     }
-    for mut child in running_commands {
-        match child.try_wait() {
-            Ok(Some(status)) => println!("exited with: {status}"),
-            Ok(None) => {
-                println!("status not ready yet, let's really wait");
-                let res = child.wait();
-                println!("result: {res:?}");
-            }
-            Err(e) => println!("error attempting to wait: {e}"),
+    if dry_run || !bg_run {
+        for mut child in running_commands {
+            wait_for_child(&mut child);
         }
+        println!("{} commands run.", commands_run);
     }
-    println!("{} commands run.", commands_run);
 }
