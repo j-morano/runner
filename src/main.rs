@@ -121,12 +121,12 @@ fn main() {
     // Print the command that will be executed.
     print!("$ ");
     for arg in &command {
-        print!("{} ", arg);
+        println!("{}", arg);
     }
     println!("Args:");
     // Pretty print multi_args HashMap.
     for (key, value) in &multi_args {
-        println!("{}: {:?}", key, value);
+        println!("  {}: {:?}", key, value);
     }
 
     // Compute all the different combinations of arguments possible.
