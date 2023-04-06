@@ -121,13 +121,14 @@ fn main() {
     // Print the command that will be executed.
     print!("$ ");
     for arg in &command {
-        println!("{}", arg);
+        print!("{} ", arg);
     }
-    println!("Args:");
+    println!("");
     // Pretty print multi_args HashMap.
     for (key, value) in &multi_args {
         println!("  {}: {:?}", key, value);
     }
+    println!("");
 
     // Compute all the different combinations of arguments possible.
     let mut combinations = Vec::new();
@@ -165,7 +166,7 @@ fn main() {
     }
     println!("Combinations:");
     for combination in &combinations {
-        println!("{:?}", combination);
+        println!("  {:?}", combination);
     }
     if combinations.len() == 0 {
         // Just run the command without any arguments.
