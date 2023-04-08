@@ -207,8 +207,8 @@ fn main() {
             }
         }
         combinations = new_combinations;
+        println!();
     }
-    println!();
     if combinations.len() > 0 {
         println!("Combinations ({}):", combinations.len());
         for combination in &combinations {
