@@ -1,17 +1,19 @@
 use std::env;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
+use std::io::ErrorKind;
 use std::process::{Command, Stdio, Child};
 
 
 const HELP: &str = "\
 Usage: runner [option] <command> [--] <args>
 Options:
-    --bg-runner     Run the commands in the background.
-    -h, --help      Print this help message.
-    --dry-runner    Print the commands that would be executed without actually
-                    executing them.
-    --runners       Number of commands to run in parallel.
-    -v, --version   Print the version of runner.\
+    --bg-runner         Run the commands in the background.
+    --filter <combs>@   Filter certain combinations of arguments.
+    -h, --help          Print this help message.
+    --dry-runner        Print the commands that would be executed without
+                        actually executing them.
+    --runners           Number of commands to run in parallel.
+    -v, --version       Print the version of runner.\
 ";
 
 
@@ -70,14 +72,27 @@ fn main() {
     let mut dry_run = false;
     let mut bg_run = false;
     let mut new_command_args = Vec::new();
+    let mut filter_combs = Vec::new();
+    let mut filter = false;
     for arg in command_args {
-        if arg == "--dry-runner" {
+        if filter {
+            if arg.starts_with("-") || arg == "@" {
+                filter = false;
+            } else {
+                if arg.ends_with("@") {
+                    filter_combs.push(arg.trim_end_matches("@"));
+                    filter = false;
+                } else {
+                    filter_combs.push(arg);
+                }
+            }
+        } else if arg == "--dry-runner" {
             dry_run = true;
-        }
-        else if arg == "--bg-runner" {
+        } else if arg == "--bg-runner" {
             bg_run = true;
-        }
-        else {
+        } else if arg == "--filter" {
+            filter = true; 
+        } else {
             new_command_args.push(arg);
         }
     }
@@ -95,9 +110,10 @@ fn main() {
         command.push(&command_args[i]);
         i += 1;
     }
+    // The remaining arguments are the arguments for the command.
     let command_args = &command_args[i..];
 
-    let mut multi_args = HashMap::new();
+    let mut multi_args = BTreeMap::new();
     let mut i = 0;
     let empty_string = "".to_string();
     loop {
@@ -130,27 +146,25 @@ fn main() {
     for arg in &command {
         print!("{} ", arg);
     }
-    println!("");
-    // Pretty print multi_args HashMap.
-    for (key, value) in &multi_args {
+    println!();
+    // Pretty print multi_args.
+    for (key, value) in multi_args.iter().rev() {
         println!("  {}: {:?}", key, value);
     }
-    println!("");
+    println!();
 
     // Compute all the different combinations of arguments possible.
     let mut combinations = Vec::new();
-    for (key, value) in &multi_args {
+    for (key, value) in multi_args.iter().rev() {
         if combinations.len() == 0 {
             if value.len() == 0 {
                 combinations.push(vec![(*key, "")]);
-            }
-            else {
+            } else {
                 for arg in value {
                     combinations.push(vec![(*key, *arg)]);
                 }
             }
-        }
-        else {
+        } else {
             let mut new_combinations = Vec::new();
             if value.len() == 0 {
                 for combination in &combinations {
@@ -171,15 +185,41 @@ fn main() {
             combinations = new_combinations;
         }
     }
-    println!("Combinations:");
-    for combination in &combinations {
-        println!("  {:?}", combination);
+    let mut new_combinations = Vec::new();
+    if filter_combs.len() > 0 && combinations.len() > 0 {
+        println!("Filtered combinations:");
+        for filter_comb in &filter_combs {
+            println!("  {}", filter_comb);
+        }
+        for combination in &combinations {
+            // Convert arguments to a string joined by commas
+            let mut comb_str = String::new();
+            for (_key, value) in combination {
+                comb_str.push_str(value);
+                comb_str.push_str(",");
+            }
+            // Remove the last comma.
+            comb_str.pop();
+            // Check if the combination is in the filter list.
+            // If it is, remove it from the combinations list.
+            if !filter_combs.contains(&comb_str.as_str()) {
+                new_combinations.push(combination.clone());
+            }
+        }
+        combinations = new_combinations;
     }
-    if combinations.len() == 0 {
+    println!();
+    if combinations.len() > 0 {
+        println!("Combinations ({}):", combinations.len());
+        for combination in &combinations {
+            println!("  {:?}", combination);
+        }
+    } else {
         // Just run the command without any arguments.
         println!("Running command with no arguments.");
         combinations.push(vec![]);
     }
+
     let mut commands_run = 0;
     // Array of commands that are currently running.
     let mut running_commands = Vec::new();
@@ -215,11 +255,28 @@ fn main() {
                 print!("{} ", arg.to_str().unwrap());
             }
             println!();
-            let child = command_obj
+            let child = match command_obj
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .spawn()
-                .expect("failed to execute process");
+            {
+                Ok(child) => child,
+                Err(e) => {
+                    // If the error is because the command was not found,
+                    // exit the program.
+                    if e.kind() == ErrorKind::NotFound {
+                        println!(
+                            "Command not found: {}",
+                            command_obj.get_program().to_str().unwrap()
+                        );
+                        println!("Exiting...");
+                        std::process::exit(1);
+                    } else {
+                        continue;
+                    }
+                }
+            };
+                // .expect("failed to execute process");
             // Run command detached
             running_commands.push(child);
             commands_run += 1;
