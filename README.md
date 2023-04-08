@@ -45,7 +45,7 @@ train.py --learning-rate 0.02 --epochs 8
 train.py --learning-rate 0.02 --epochs 16
 ```
 
-You can combine multiple filtering values with `+`, so that the command from Snippet 3 could be also written in the wollowing way:
+You can combine multiple filtering values with `+`, so that the command from Snippet 3 could be also written in the following way:
 ```sh
 runner train.py --filter-runs 0.01,8+16 -- --learning-rate 0.01 0.02 --epochs 4 8 16
 ```
