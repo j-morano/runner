@@ -1,17 +1,20 @@
 use std::env;
 use std::collections::BTreeMap;
 use std::io::ErrorKind;
-use std::process::{Command, Stdio, Child};
+use std::process::{Command, Stdio, Child, exit};
 
 
 const HELP: &str = "\
 Usage: runner [option] <command> [--] <args>
 Options:
     --bg-runner         Run the commands in the background.
-    --filter <combs>@   Filter certain combinations of arguments.
+    --filter-runs <combs>@
+                        Filter certain combinations of arguments.
     -h, --help          Print this help message.
     --dry-runner        Print the commands that would be executed without
-                        actually executing them.
+                          actually executing them.
+    --ordered-runner    Combine only the arguments that are in the same
+                          relative position.
     --runners           Number of commands to run in parallel.
     -v, --version       Print the version of runner.\
 ";
@@ -74,6 +77,7 @@ fn main() {
     let mut new_command_args = Vec::new();
     let mut filter_combs = Vec::new();
     let mut filter = false;
+    let mut ordered_runner = false;
     for arg in command_args {
         if filter {
             if arg.starts_with("-") || arg == "@" {
@@ -90,8 +94,10 @@ fn main() {
             dry_run = true;
         } else if arg == "--bg-runner" {
             bg_run = true;
-        } else if arg == "--filter" {
+        } else if arg == "--filter-runs" {
             filter = true; 
+        } else if arg == "--ordered-runner" {
+            ordered_runner = true;
         } else {
             new_command_args.push(arg);
         }
@@ -148,43 +154,74 @@ fn main() {
     }
     println!();
     // Pretty print multi_args.
-    for (key, value) in multi_args.iter().rev() {
+    for (key, value) in &multi_args {
         println!("  {}: {:?}", key, value);
     }
     println!();
 
-    // Compute all the different combinations of arguments possible.
-    let mut combinations = Vec::new();
-    for (key, value) in multi_args.iter().rev() {
-        if combinations.len() == 0 {
-            if value.len() == 0 {
-                combinations.push(vec![(*key, "")]);
-            } else {
-                for arg in value {
-                    combinations.push(vec![(*key, *arg)]);
-                }
-            }
+    //// Compute all the different combinations of arguments possible.
+    let mut combinations = Vec::<Vec<(&str, &str)>>::new();
+    if ordered_runner {
+        if multi_args.len() == 0 {
+            println!("Warning: --ordered-runner requires at least one argument, so it is ignored.");
+            exit(1);
         } else {
-            let mut new_combinations = Vec::new();
-            if value.len() == 0 {
-                for combination in &combinations {
-                    let mut new_combination = combination.clone();
-                    new_combination.push((*key, ""));
-                    new_combinations.push(new_combination);
-                }
-            }
-            else {
-                for arg in value {
-                    for combination in &combinations {
-                        let mut new_combination = combination.clone();
-                        new_combination.push((*key, *arg));
-                        new_combinations.push(new_combination);
+            let mut num_args = 0;
+            for (_key, value) in &multi_args {
+                if value.len() != num_args {
+                    if num_args != 0 {
+                        println!(
+                            "Error: --ordered-runner requires all arguments to have the same number of\
+                            \n       values, so it is ignored.");
+                        exit(1);
+                    } else {
+                        num_args = value.len();
                     }
                 }
             }
-            combinations = new_combinations;
+            let num_args = multi_args.iter().next().unwrap().1.len();
+            for i in 0..num_args {
+                let mut combination = Vec::new();
+                for (key, value) in &multi_args {
+                    combination.push((&*key.as_str(), value[i].as_str()));
+                }
+                combinations.push(combination);
+            }
+        }
+    } else {
+        for (key, value) in &multi_args {
+            if combinations.len() == 0 {
+                if value.len() == 0 {
+                    combinations.push(vec![(*key, "")]);
+                } else {
+                    for arg in value {
+                        combinations.push(vec![(*key, *arg)]);
+                    }
+                }
+            } else {
+                let mut new_combinations = Vec::new();
+                if value.len() == 0 {
+                    for combination in &combinations {
+                        let mut new_combination = combination.clone();
+                        new_combination.push((*key, ""));
+                        new_combinations.push(new_combination);
+                    }
+                }
+                else {
+                    for arg in value {
+                        for combination in &combinations {
+                            let mut new_combination = combination.clone();
+                            new_combination.push((*key, *arg));
+                            new_combinations.push(new_combination);
+                        }
+                    }
+                }
+                combinations = new_combinations;
+            }
         }
     }
+
+    //// Filter combinations.
     let mut new_combinations = Vec::new();
     if filter_combs.len() > 0 && combinations.len() > 0 {
         println!("Filtered combinations:");
@@ -209,6 +246,7 @@ fn main() {
         combinations = new_combinations;
         println!();
     }
+
     if combinations.len() > 0 {
         println!("Combinations ({}):", combinations.len());
         for combination in &combinations {
@@ -270,7 +308,7 @@ fn main() {
                             command_obj.get_program().to_str().unwrap()
                         );
                         println!("Exiting...");
-                        std::process::exit(1);
+                        exit(1);
                     } else {
                         continue;
                     }
