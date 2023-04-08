@@ -30,7 +30,7 @@ For example, the program shown in Snippet 3 would be equivalent to the program s
 Snippet 3.
 ```sh
 #!/bin/sh
-runner train.py --filter-runs 0.01,16 -- --learning-rate 0.01 0.02 --epochs 4 8 16
+runner train.py --filter-runs 0.01,8 0.01,16 -- --learning-rate 0.01 0.02 --epochs 4 8 16
 ```
 
 Snippet 4.
@@ -38,12 +38,18 @@ Snippet 4.
 #!/bin/sh
 # Example program to train a deep learning model with different hyperparameters:
 train.py --learning-rate 0.01 --epochs 4
-train.py --learning-rate 0.01 --epochs 8
-# No 0.01, 16 combination
+# No 0.01,8 combination
+# No 0.01,16 combination
 train.py --learning-rate 0.02 --epochs 4
 train.py --learning-rate 0.02 --epochs 8
 train.py --learning-rate 0.02 --epochs 16
 ```
+
+You can combine multiple filtering values with `+`, so that the command from Snippet 3 could be also written in the wollowing way:
+```sh
+runner train.py --filter-runs 0.01,8+16 -- --learning-rate 0.01 0.02 --epochs 4 8 16
+```
+
 
 Finally, you can also tell `runner` to combine only the arguments that are in the same relative position using `--ordered-runner` option.
 Note that this requires the lengths of the different lists of argument values to be equal. 

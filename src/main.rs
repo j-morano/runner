@@ -93,7 +93,20 @@ fn main() {
             if arg.starts_with("-") {
                 filter = false;
             } else {
-                filter_combs.push(arg.as_str());
+                // If string contains a '+' character, then join the first part
+                //   until the comma with all the other parts separated by the
+                //   '+' character.
+                if arg.contains("+") {
+                    let mut parts = arg.split(",");
+                    let first_part = parts.next().unwrap();
+                    let second_part = parts.next().unwrap().to_string();
+                    let second_parts = second_part.split("+");
+                    for part in second_parts {
+                        filter_combs.push(format!("{},{}", first_part, part));
+                    }
+                } else {
+                    filter_combs.push(arg.to_string());
+                }
                 continue;
             }
         }
@@ -245,7 +258,7 @@ fn main() {
             comb_str.pop();
             // Check if the combination is in the filter list.
             // If it is, remove it from the combinations list.
-            if !filter_combs.contains(&comb_str.as_str()) {
+            if !filter_combs.contains(&&comb_str) {
                 new_combinations.push(combination.clone());
             }
         }
