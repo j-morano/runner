@@ -1,7 +1,10 @@
 # runner
 
-`runner` is a command line utility that allows you to run any program with single-value arguments as if they were multi-valued. For example, instead of doing this,
+`runner` is a command line utility that allows you to run any program with single-valued arguments as if they were multi-valued.
+More specifically, `runner` takes all the values of the arguments and combines them, running the program/command with each combination.
+Thus, a program like the one shown in Snippet 1 could be summarized using `runner` as it is shown in Snippet 2.
 
+Snippet 1.
 ```sh
 #!/bin/sh
 # Example program to train a deep learning model with different hyperparameters:
@@ -13,23 +16,25 @@ train.py --learning-rate 0.02 --epochs 8
 train.py --learning-rate 0.02 --epochs 16
 ```
 
-you can do this
-
+Snippet 2.
 ```sh
 #!/bin/sh
-$ runner train.py -- --learning-rate 0.01 0.02 --epochs 4 8 16
+runner train.py -- --learning-rate 0.01 0.02 --epochs 4 8 16
 ```
 
-Additionally, combinations of values can be avoided, or filtered. For example, doing this
 
+Additionally, `runner` allows to filter combinations of argument values.
+Thus, the program shown in Snippet 3 is equivalent to the program shown in Snippet 4.
+
+
+Snippet 3
 ```sh
 #!/bin/sh
-$ runner train.py --filter 0.01,16 @ -- --learning-rate 0.01 0.02 --epochs 4 8 16
+runner train.py --filter 0.01,16 @ -- --learning-rate 0.01 0.02 --epochs 4 8 16
+# NOTE: The at sign `@` is used to indicate the end of the filtering arguments.
 ```
-> NOTE: The at sign `@` is used to indicate the end of the filtering arguments.
 
-is equivalent to do this
-
+Snippet 4.
 ```sh
 #!/bin/sh
 # Example program to train a deep learning model with different hyperparameters:
