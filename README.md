@@ -30,8 +30,7 @@ For example, the program shown in Snippet 3 would be equivalent to the program s
 Snippet 3.
 ```sh
 #!/bin/sh
-runner train.py --filter-runs 0.01,16 @ -- --learning-rate 0.01 0.02 --epochs 4 8 16
-# NOTE: The at sign `@` is used to indicate the end of the filtering arguments.
+runner train.py --filter-runs 0.01,16 -- --learning-rate 0.01 0.02 --epochs 4 8 16
 ```
 
 Snippet 4.

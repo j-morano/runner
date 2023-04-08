@@ -8,7 +8,7 @@ const HELP: &str = "\
 Usage: runner [option] <command> [--] <args>
 Options:
     --bg-runner         Run the commands in the background.
-    --filter-runs <combs>@
+    --filter-runs <combs>
                         Filter certain combinations of arguments.
     -h, --help          Print this help message.
     --dry-runner        Print the commands that would be executed without
@@ -37,6 +37,16 @@ fn wait_for_child(child: &mut Child) {
         }
         Err(e) => println!("error attempting to wait: {e}"),
     }
+}
+
+
+fn print_command(command_obj: &Command) {
+    println!("{}", "-".repeat(80));
+    print!("$ {} ", command_obj.get_program().to_str().unwrap());
+    for arg in command_obj.get_args() {
+        print!("{} ", arg.to_str().unwrap());
+    }
+    println!();
 }
 
 
@@ -80,17 +90,14 @@ fn main() {
     let mut ordered_runner = false;
     for arg in command_args {
         if filter {
-            if arg.starts_with("-") || arg == "@" {
+            if arg.starts_with("-") {
                 filter = false;
             } else {
-                if arg.ends_with("@") {
-                    filter_combs.push(arg.trim_end_matches("@"));
-                    filter = false;
-                } else {
-                    filter_combs.push(arg);
-                }
+                filter_combs.push(arg.as_str());
+                continue;
             }
-        } else if arg == "--dry-runner" {
+        }
+        if arg == "--dry-runner" {
             dry_run = true;
         } else if arg == "--bg-runner" {
             bg_run = true;
@@ -127,10 +134,10 @@ fn main() {
             break;
         }
         if command_args[i].starts_with("-") {
-            multi_args.insert(command_args[i], Vec::new());
+            multi_args.insert(i, (command_args[i], Vec::new()));
             for j in i+1..command_args.len() {
                 if !command_args[j].starts_with("-") {
-                    multi_args.get_mut(command_args[i]).unwrap().push(command_args[j]);
+                    multi_args.get_mut(&i).unwrap().1.push(command_args[j]);
                 }
                 else {
                     i = j-1;
@@ -141,7 +148,7 @@ fn main() {
             if i == 0 {
                 println!("First argument does not start with a dash.");
                 println!("=> Using all arguments as a single main argument.");
-                multi_args.insert(&empty_string, command_args.to_vec());
+                multi_args.insert(0, (&empty_string, command_args.to_vec()));
             }
         }
         i += 1;
@@ -154,8 +161,8 @@ fn main() {
     }
     println!();
     // Pretty print multi_args.
-    for (key, value) in &multi_args {
-        println!("  {}: {:?}", key, value);
+    for (_, value) in &multi_args {
+        println!("  {}: {:?}", value.0, value.1);
     }
     println!();
 
@@ -167,51 +174,50 @@ fn main() {
             exit(1);
         } else {
             let mut num_args = 0;
-            for (_key, value) in &multi_args {
-                if value.len() != num_args {
+            for (_, value) in &multi_args {
+                if value.1.len() != num_args {
                     if num_args != 0 {
                         println!(
                             "Error: --ordered-runner requires all arguments to have the same number of\
                             \n       values, so it is ignored.");
                         exit(1);
                     } else {
-                        num_args = value.len();
+                        num_args = value.1.len();
                     }
                 }
             }
-            let num_args = multi_args.iter().next().unwrap().1.len();
             for i in 0..num_args {
                 let mut combination = Vec::new();
-                for (key, value) in &multi_args {
-                    combination.push((&*key.as_str(), value[i].as_str()));
+                for (_, value) in &multi_args {
+                    combination.push((value.0.as_str(), value.1[i].as_str()));
                 }
                 combinations.push(combination);
             }
         }
     } else {
-        for (key, value) in &multi_args {
+        for (_, value) in &multi_args {
             if combinations.len() == 0 {
-                if value.len() == 0 {
-                    combinations.push(vec![(*key, "")]);
+                if value.1.len() == 0 {
+                    combinations.push(vec![(value.0, "")]);
                 } else {
-                    for arg in value {
-                        combinations.push(vec![(*key, *arg)]);
+                    for arg in &value.1 {
+                        combinations.push(vec![(value.0, &*arg)]);
                     }
                 }
             } else {
                 let mut new_combinations = Vec::new();
-                if value.len() == 0 {
+                if value.1.len() == 0 {
                     for combination in &combinations {
                         let mut new_combination = combination.clone();
-                        new_combination.push((*key, ""));
+                        new_combination.push((value.0, ""));
                         new_combinations.push(new_combination);
                     }
                 }
                 else {
-                    for arg in value {
+                    for arg in &value.1 {
                         for combination in &combinations {
                             let mut new_combination = combination.clone();
-                            new_combination.push((*key, *arg));
+                            new_combination.push((value.0, &*arg));
                             new_combinations.push(new_combination);
                         }
                     }
@@ -277,9 +283,8 @@ fn main() {
         }
         println!();
         if dry_run {
-            continue;
-        }
-        else {
+            print_command(&command_obj);
+        } else {
             if running_commands.len() >= runners {
                 // Wait for a command to finish.
                 let mut child: Child = running_commands.remove(0);
@@ -287,12 +292,7 @@ fn main() {
                 wait_for_child(&mut child);
             }
             // Print the command that will be executed without the quotes.
-            println!("{}", "-".repeat(80));
-            print!("$ {} ", command_obj.get_program().to_str().unwrap());
-            for arg in command_obj.get_args() {
-                print!("{} ", arg.to_str().unwrap());
-            }
-            println!();
+            print_command(&command_obj);
             let child = match command_obj
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit())
@@ -314,16 +314,20 @@ fn main() {
                     }
                 }
             };
-                // .expect("failed to execute process");
             // Run command detached
             running_commands.push(child);
-            commands_run += 1;
         }
+        commands_run += 1;
     }
     if dry_run || !bg_run {
         for mut child in running_commands {
             wait_for_child(&mut child);
         }
-        println!("{} commands run.", commands_run);
+        print!("\n{} commands run.", commands_run);
+        if dry_run {
+            println!(" (dry run)");
+        } else {
+            println!();
+        }
     }
 }
