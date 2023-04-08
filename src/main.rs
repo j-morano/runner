@@ -4,14 +4,14 @@ use std::process::{Command, Stdio, Child};
 
 
 const HELP: &str = "\
-Usage: runner [option] <command> <args>
+Usage: runner [option] <command> [--] <args>
 Options:
     --bg-runner     Run the commands in the background.
     -h, --help      Print this help message.
-    -v, --version   Print the version of runner.
     --dry-runner    Print the commands that would be executed without actually
                     executing them.
-    --runners       Number of commands to run in parallel.\
+    --runners       Number of commands to run in parallel.
+    -v, --version   Print the version of runner.\
 ";
 
 
@@ -99,20 +99,27 @@ fn main() {
 
     let mut multi_args = HashMap::new();
     let mut i = 0;
+    let empty_string = "".to_string();
     loop {
         if i >= command_args.len() {
             break;
         }
         if command_args[i].starts_with("-") {
-            multi_args.insert(&command_args[i], Vec::new());
+            multi_args.insert(command_args[i], Vec::new());
             for j in i+1..command_args.len() {
                 if !command_args[j].starts_with("-") {
-                    multi_args.get_mut(&command_args[i]).unwrap().push(&command_args[j]);
+                    multi_args.get_mut(command_args[i]).unwrap().push(command_args[j]);
                 }
                 else {
                     i = j-1;
                     break;
                 }
+            }
+        } else {
+            if i == 0 {
+                println!("First argument does not start with a dash.");
+                println!("=> Using all arguments as a single main argument.");
+                multi_args.insert(&empty_string, command_args.to_vec());
             }
         }
         i += 1;
@@ -170,7 +177,7 @@ fn main() {
     }
     if combinations.len() == 0 {
         // Just run the command without any arguments.
-        println!("Running command without arguments.");
+        println!("Running command with no arguments.");
         combinations.push(vec![]);
     }
     let mut commands_run = 0;
@@ -182,7 +189,10 @@ fn main() {
             command_obj.arg(arg);
         }
         for (key, value) in combination {
-            command_obj.arg(key);
+            // Add the key if it is not an empty string.
+            if !key.is_empty() {
+                command_obj.arg(key);
+            }
             if !value.is_empty() {
                 command_obj.arg(value);
             }
