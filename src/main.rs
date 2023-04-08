@@ -50,10 +50,72 @@ fn print_command(command_obj: &Command) {
 }
 
 
+/// Given a vector containing a partial Cartesian product, and a list of items,
+/// return a vector adding the list of items to the partial Cartesian product.
+///
+/// # Example
+///
+/// ```
+/// let partial_product = vec![vec![1, 4], vec![1, 5], vec![2, 4], vec![2, 5]];
+/// let items = &[6, 7];
+/// let next_product = partial_cartesian(partial_product, items);
+/// assert_eq!(next_product, vec![vec![1, 4, 6],
+///                               vec![1, 4, 7],
+///                               vec![1, 5, 6],
+///                               vec![1, 5, 7],
+///                               vec![2, 4, 6],
+///                               vec![2, 4, 7],
+///                               vec![2, 5, 6],
+///                               vec![2, 5, 7]]);
+/// ```
+pub fn partial_cartesian<T: Clone>(a: Vec<Vec<T>>, b: &[T]) -> Vec<Vec<T>> {
+    a.into_iter().flat_map(|xs| {
+        b.iter().cloned().map(|y| {
+            let mut vec = xs.clone();
+            vec.push(y);
+            vec
+        }).collect::<Vec<_>>()
+    }).collect()
+}
+
+
+/// Creates a Cartesian product of the given lists.
+pub fn cartesian_product<T: Clone>(lists: &[Vec<T>]) -> Vec<Vec<T>> {
+    match lists.split_first() {
+        Some((first, rest)) => {
+            let init: Vec<Vec<T>> = first.iter().cloned().map(|n| vec![n.clone()]).collect();
+
+            rest.iter().cloned().fold(init, |vec, list| {
+                partial_cartesian(vec, &list)
+            })
+        },
+        None => {
+            vec![]
+        }
+    }
+}
+
+
+/// Combines the elements that are in the same relative position.
+pub fn ordered_combinations<T: Clone>(lists: &[Vec<T>],) -> Vec<Vec<T>> {
+    let mut combs: Vec<Vec<T>> = Vec::new();
+    // Get length of the first list.
+    let num_combinations = lists[0].len();
+    for i in 0..num_combinations {
+        let mut comb: Vec<T> = Vec::new();
+        for list in lists {
+            comb.push(list[i].clone());
+        }
+        combs.push(comb);
+    }
+    combs
+}
+
+
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let mut runners = 1;
-    let mut command_start = 1;
+
+    //// Basic standard command line options.
     if args.len() < 2 {
         println!("{}", HELP);
         return;
@@ -66,28 +128,18 @@ fn main() {
         println!("{}", HELP);
         return;
     }
-    else if args[1] == "--runners" {
-        if args.len() < 3 {
-            println!("Error: --runners requires an argument.");
-            return;
-        }
-        runners = args[2].parse().expect("Error: --runners requires an integer argument.");
-        if runners < 1 {
-            println!("Error: --runners requires an integer argument greater than 0.");
-            return;
-        }
-        println!("Parallel runners: {}.", runners);
-        command_start = 3;
-    }
+    // Exclude the first argument, which is the name of the program.
+    let command_args = &args[1..];
 
-    let command_args = &args[command_start..];
-
+    //// Parse command line options of runner.
+    let mut runners = 1;
     let mut dry_run = false;
     let mut bg_run = false;
     let mut new_command_args = Vec::new();
     let mut filter_combs = Vec::new();
     let mut filter = false;
     let mut ordered_runner = false;
+    let mut parse_runners = false;
     for arg in command_args {
         if filter {
             if arg.starts_with("-") {
@@ -97,12 +149,17 @@ fn main() {
                 //   until the comma with all the other parts separated by the
                 //   '+' character.
                 if arg.contains("+") {
-                    let mut parts = arg.split(",");
-                    let first_part = parts.next().unwrap();
-                    let second_part = parts.next().unwrap().to_string();
-                    let second_parts = second_part.split("+");
-                    for part in second_parts {
-                        filter_combs.push(format!("{},{}", first_part, part));
+                    let options = arg.split(",");
+                    let mut option_parts = Vec::new();
+                    for option in options {
+                        let parts: Vec<_> = option.split("+").collect();
+                        // Convert the iterator to a vector.
+                        option_parts.push(parts);
+                    }
+                    // Cartesian product of the options.
+                    let combs = cartesian_product(&option_parts);
+                    for comb in combs {
+                        filter_combs.push(comb.join(","));
                     }
                 } else {
                     filter_combs.push(arg.to_string());
@@ -110,8 +167,25 @@ fn main() {
                 continue;
             }
         }
+        if parse_runners {
+            runners = match arg.parse() {
+                Ok(n) => n,
+                Err(_) => {
+                    println!("Error: --runners requires an integer argument.");
+                    exit(1);
+                }
+            };
+            if runners < 1 {
+                println!("Error: --runners requires an integer argument greater than 0.");
+                exit(1);
+            }
+            parse_runners = false;
+            continue;
+        }
         if arg == "--dry-runner" {
             dry_run = true;
+        } else if arg == "--runners" {
+            parse_runners = true;
         } else if arg == "--bg-runner" {
             bg_run = true;
         } else if arg == "--filter-runs" {
@@ -179,91 +253,63 @@ fn main() {
     }
     println!();
 
-    //// Compute all the different combinations of arguments possible.
-    let mut combinations = Vec::<Vec<(&str, &str)>>::new();
-    if ordered_runner {
-        if multi_args.len() == 0 {
-            println!("Warning: --ordered-runner requires at least one argument, so it is ignored.");
-            exit(1);
-        } else {
-            let mut num_args = 0;
-            for (_, value) in &multi_args {
-                if value.1.len() != num_args {
-                    if num_args != 0 {
-                        println!(
-                            "Error: --ordered-runner requires all arguments to have the same number of\
-                            \n       values, so it is ignored.");
-                        exit(1);
-                    } else {
-                        num_args = value.1.len();
-                    }
-                }
-            }
-            for i in 0..num_args {
-                let mut combination = Vec::new();
-                for (_, value) in &multi_args {
-                    combination.push((value.0.as_str(), value.1[i].as_str()));
-                }
-                combinations.push(combination);
-            }
+    println!("Number of runners: {}", runners);
+    println!();
+
+    if filter_combs.len() > 0 {
+        println!("Filter runs:");
+        for comb in &filter_combs {
+            println!("  {}", comb);
         }
-    } else {
-        for (_, value) in &multi_args {
-            if combinations.len() == 0 {
-                if value.1.len() == 0 {
-                    combinations.push(vec![(value.0, "")]);
-                } else {
-                    for arg in &value.1 {
-                        combinations.push(vec![(value.0, &*arg)]);
-                    }
-                }
-            } else {
-                let mut new_combinations = Vec::new();
-                if value.1.len() == 0 {
-                    for combination in &combinations {
-                        let mut new_combination = combination.clone();
-                        new_combination.push((value.0, ""));
-                        new_combinations.push(new_combination);
-                    }
-                }
-                else {
-                    for arg in &value.1 {
-                        for combination in &combinations {
-                            let mut new_combination = combination.clone();
-                            new_combination.push((value.0, &*arg));
-                            new_combinations.push(new_combination);
-                        }
-                    }
-                }
-                combinations = new_combinations;
-            }
-        }
+        println!();
     }
 
-    //// Filter combinations.
-    let mut new_combinations = Vec::new();
-    if filter_combs.len() > 0 && combinations.len() > 0 {
-        println!("Filtered combinations:");
-        for filter_comb in &filter_combs {
-            println!("  {}", filter_comb);
+    let mut options = Vec::new();
+    let mut flags = Vec::new();
+    let mut multi_args_values = Vec::new();
+    for (_, value) in &multi_args {
+        let values = &value.1.clone();
+        // copy value.1 to values
+        let values = values.clone();
+        if values.len() > 0 {
+            multi_args_values.push(values);
+            options.push(value.0.clone());
+        } else {
+            flags.push(value.0.clone());
         }
-        for combination in &combinations {
-            // Convert arguments to a string joined by commas
-            let mut comb_str = String::new();
-            for (_key, value) in combination {
-                comb_str.push_str(value);
-                comb_str.push_str(",");
-            }
-            // Remove the last comma.
-            comb_str.pop();
-            // Check if the combination is in the filter list.
-            // If it is, remove it from the combinations list.
-            if !filter_combs.contains(&&comb_str) {
-                new_combinations.push(combination.clone());
-            }
+    }
+    let combs;
+    if ordered_runner {
+        // Check that all the options have the same number of values.
+        let length = multi_args_values[0].len();
+        if !multi_args_values.iter().all(|x| x.len() == length) {
+            println!("Error: --ordered-runner requires all options to have the same number of values.");
+            exit(1);
         }
-        combinations = new_combinations;
-        println!();
+
+        combs = ordered_combinations(&multi_args_values);
+    } else {
+        combs = cartesian_product(&multi_args_values);
+    }
+    let mut combinations = Vec::<Vec<(&str, &str)>>::new();
+    for comb in &combs {
+        let mut i = 0;
+        let mut option_values = String::new();
+        let mut this_comb = Vec::new();
+        for option in &options {
+            this_comb.push((option.as_str(), comb[i].as_str()));
+            // Create string with all the option values separated by a comma.
+            option_values.push_str(&format!("{},", comb[i]));
+            i += 1;
+        }
+        // Remove the last comma.
+        option_values.pop();
+        for flag in &flags {
+            this_comb.push((flag.as_str(), ""));
+        }
+        if !filter_combs.contains(&option_values) {
+            combinations.push(this_comb);
+        }
     }
 
     if combinations.len() > 0 {
