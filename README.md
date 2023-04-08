@@ -20,13 +20,13 @@ you can do this
 $ runner train.py -- --learning-rate 0.01 0.02 --epochs 4 8 16
 ```
 
-Additionally, combinations of values can be avoided, or filtered. For example, this
+Additionally, combinations of values can be avoided, or filtered. For example, doing this
 
 ```sh
 #!/bin/sh
 $ runner train.py --filter 0.01,16 @ -- --learning-rate 0.01 0.02 --epochs 4 8 16
 ```
-The at sign `@` is used to indicate the end of the filtering arguments.
+> NOTE: The at sign `@` is used to indicate the end of the filtering arguments.
 
 is equivalent to do this
 
