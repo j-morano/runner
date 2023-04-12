@@ -138,6 +138,8 @@ fn main() {
     let mut new_command_args = Vec::new();
     let mut filter_combs = Vec::new();
     let mut filter = false;
+    let mut allow_combs = Vec::new();
+    let mut allow = false;
     let mut ordered_runner = false;
     let mut parse_runners = false;
     for arg in command_args {
@@ -166,8 +168,33 @@ fn main() {
                 }
                 continue;
             }
-        }
-        if parse_runners {
+        } else if allow {
+            // TODO: repeated code
+            if arg.starts_with("-") {
+                allow = false;
+            } else {
+                // If string contains a '+' character, then join the first part
+                //   until the comma with all the other parts separated by the
+                //   '+' character.
+                if arg.contains("+") {
+                    let options = arg.split(",");
+                    let mut option_parts = Vec::new();
+                    for option in options {
+                        let parts: Vec<_> = option.split("+").collect();
+                        // Convert the iterator to a vector.
+                        option_parts.push(parts);
+                    }
+                    // Cartesian product of the options.
+                    let combs = cartesian_product(&option_parts);
+                    // Append the combinations to the filter combinations.
+                    allow_combs.append(&mut combs.clone());
+                } else {
+                    let options = arg.split(",").collect();
+                    allow_combs.push(options);
+                }
+                continue;
+            }
+        } else if parse_runners {
             runners = match arg.parse() {
                 Ok(n) => n,
                 Err(_) => {
@@ -190,6 +217,8 @@ fn main() {
             bg_run = true;
         } else if arg == "--filter-runs" {
             filter = true; 
+        } else if arg == "--allow-runs" {
+            allow = true;
         } else if arg == "--ordered-runner" {
             ordered_runner = true;
         } else {
@@ -259,7 +288,7 @@ fn main() {
     if filter_combs.len() > 0 {
         println!("Filter runs:");
         for comb in &filter_combs {
-            println!("  {}", comb.join(","));
+            println!("  \"{}\"", comb.join(","));
         }
         println!();
     }
@@ -312,6 +341,28 @@ fn main() {
                 .all(
                     |x| option_values.contains(&&x.to_string())
                 );
+            if match_found {
+                break;
+            }
+        }
+        for allow_comb in &allow_combs {
+            // Check if any option values are in the allow combination.
+            // If so, then check if all option values are in the allow
+            //   combination.
+            // Check if the first allow value is in the option values.
+            //   If so, then check if all option values are in the allow
+            //   combination.
+            let first_present = option_values.contains(&&allow_comb[0].to_string());
+            if first_present {
+                // Check if all option values are in the allow combination.
+                match_found = !allow_comb.iter()
+                    .all(
+                        |x| option_values.contains(&&x.to_string())
+                    );
+                if match_found {
+                    break;
+                }
+            }
         }
         if !match_found {
             combinations.push(this_comb);
