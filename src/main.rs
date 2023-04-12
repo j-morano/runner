@@ -27,26 +27,51 @@ fn print_version() {
 }
 
 
-fn wait_for_child(child: &mut Child) {
+fn wait_for_child(child: &mut Child) -> bool {
+    // If the return value of the prgram is different than 0, then return false,
+    //  otherwise return true.
     match child.try_wait() {
-        Ok(Some(status)) => println!("exited with: {status}"),
+        Ok(Some(status)) => {
+            println!("exited with: {status}");
+            if status.success() {
+                true
+            } else {
+                false
+            }
+        },
         Ok(None) => {
             println!("status not ready yet, let's really wait");
             let res = child.wait();
             println!("result: {res:?}");
+            if res.unwrap().success() {
+                true
+            } else {
+                false
+            }
         }
-        Err(e) => println!("error attempting to wait: {e}"),
+        Err(e) => {
+            println!("error attempting to wait: {e}");
+            false
+        }
     }
 }
 
 
-fn print_command(command_obj: &Command) {
+fn print_command(command_obj: &Command) -> String {
+    let mut command_string = String::new();
     println!("{}", "-".repeat(80));
-    print!("$ {} ", command_obj.get_program().to_str().unwrap());
+    let command_name = command_obj.get_program().to_str().unwrap();
+    print!("$ {} ", command_name);
+    command_string.push_str(command_name);
+    command_string.push_str(" ");
     for arg in command_obj.get_args() {
-        print!("{} ", arg.to_str().unwrap());
+        let arg_str = arg.to_str().unwrap();
+        print!("{} ", arg_str);
+        command_string.push_str(arg_str);
+        command_string.push_str(" ");
     }
     println!();
+    command_string
 }
 
 
@@ -112,6 +137,28 @@ pub fn ordered_combinations<T: Clone>(lists: &[Vec<T>],) -> Vec<Vec<T>> {
 }
 
 
+pub fn parse_rules<'a>(arg: &'a str, rules_combs: &mut Vec<Vec<&'a str>>) {
+    // If string contains a '+' character, then join the first part
+    //   until the comma with all the other parts separated by the
+    //   '+' character.
+    let options: Vec<&str> = arg.split(",").collect();
+    if arg.contains("+") {
+        let mut option_parts = Vec::new();
+        for option in options {
+            let parts: Vec<_> = option.split("+").collect();
+            // Convert the iterator to a vector.
+            option_parts.push(parts);
+        }
+        // Cartesian product of the options.
+        let combs = cartesian_product(&option_parts);
+        // Append the combinations to the filter combinations.
+        rules_combs.append(&mut combs.clone());
+    } else {
+        rules_combs.push(options);
+    }
+}
+
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -147,51 +194,14 @@ fn main() {
             if arg.starts_with("-") {
                 filter = false;
             } else {
-                // If string contains a '+' character, then join the first part
-                //   until the comma with all the other parts separated by the
-                //   '+' character.
-                if arg.contains("+") {
-                    let options = arg.split(",");
-                    let mut option_parts = Vec::new();
-                    for option in options {
-                        let parts: Vec<_> = option.split("+").collect();
-                        // Convert the iterator to a vector.
-                        option_parts.push(parts);
-                    }
-                    // Cartesian product of the options.
-                    let combs = cartesian_product(&option_parts);
-                    // Append the combinations to the filter combinations.
-                    filter_combs.append(&mut combs.clone());
-                } else {
-                    let options = arg.split(",").collect();
-                    filter_combs.push(options);
-                }
+                parse_rules(arg, &mut filter_combs);
                 continue;
             }
         } else if allow {
-            // TODO: repeated code
             if arg.starts_with("-") {
                 allow = false;
             } else {
-                // If string contains a '+' character, then join the first part
-                //   until the comma with all the other parts separated by the
-                //   '+' character.
-                if arg.contains("+") {
-                    let options = arg.split(",");
-                    let mut option_parts = Vec::new();
-                    for option in options {
-                        let parts: Vec<_> = option.split("+").collect();
-                        // Convert the iterator to a vector.
-                        option_parts.push(parts);
-                    }
-                    // Cartesian product of the options.
-                    let combs = cartesian_product(&option_parts);
-                    // Append the combinations to the filter combinations.
-                    allow_combs.append(&mut combs.clone());
-                } else {
-                    let options = arg.split(",").collect();
-                    allow_combs.push(options);
-                }
+                parse_rules(arg, &mut allow_combs);
                 continue;
             }
         } else if parse_runners {
@@ -399,8 +409,10 @@ fn main() {
     let mut commands_run = 0;
     // Array of commands that are currently running.
     let mut running_commands = Vec::new();
+    let mut failed_commands = Vec::new();
     for c in command {
         for combination in &combinations {
+            // Get c as string
             let mut command_obj = Command::new(&c[0]);
             for arg in &c[1..] {
                 command_obj.arg(arg);
@@ -420,12 +432,14 @@ fn main() {
             } else {
                 if running_commands.len() >= runners {
                     // Wait for a command to finish.
-                    let mut child: Child = running_commands.remove(0);
+                    let mut child: (Child, String) = running_commands.remove(0);
                     //https://doc.rust-lang.org/std/process/struct.Child.html
-                    wait_for_child(&mut child);
+                    if !wait_for_child(&mut child.0) {
+                        failed_commands.push(child.1);
+                    }
                 }
                 // Print the command that will be executed without the quotes.
-                print_command(&command_obj);
+                let c_str = print_command(&command_obj);
                 let child = match command_obj
                     .stdout(Stdio::inherit())
                     .stderr(Stdio::inherit())
@@ -448,14 +462,16 @@ fn main() {
                     }
                 };
                 // Run command detached
-                running_commands.push(child);
+                running_commands.push((child, c_str));
             }
             commands_run += 1;
         }
     }
     if dry_run || !bg_run {
         for mut child in running_commands {
-            wait_for_child(&mut child);
+            if !wait_for_child(&mut child.0) {
+                failed_commands.push(child.1);
+            }
         }
         print!("\n{} commands run.", commands_run);
         if dry_run {
@@ -463,5 +479,12 @@ fn main() {
         } else {
             println!();
         }
+    }
+    if failed_commands.len() > 0 {
+        println!("Failed commands:");
+        for command in &failed_commands {
+            println!("  $ {}", command);
+        }
+        exit(1);
     }
 }
