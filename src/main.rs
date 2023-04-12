@@ -158,11 +158,11 @@ fn main() {
                     }
                     // Cartesian product of the options.
                     let combs = cartesian_product(&option_parts);
-                    for comb in combs {
-                        filter_combs.push(comb.join(","));
-                    }
+                    // Append the combinations to the filter combinations.
+                    filter_combs.append(&mut combs.clone());
                 } else {
-                    filter_combs.push(arg.to_string());
+                    let options = arg.split(",").collect();
+                    filter_combs.push(options);
                 }
                 continue;
             }
@@ -259,7 +259,7 @@ fn main() {
     if filter_combs.len() > 0 {
         println!("Filter runs:");
         for comb in &filter_combs {
-            println!("  {}", comb);
+            println!("  {}", comb.join(","));
         }
         println!();
     }
@@ -294,20 +294,26 @@ fn main() {
     let mut combinations = Vec::<Vec<(&str, &str)>>::new();
     for comb in &combs {
         let mut i = 0;
-        let mut option_values = String::new();
+        let mut option_values = Vec::new();
         let mut this_comb = Vec::new();
         for option in &options {
             this_comb.push((option.as_str(), comb[i].as_str()));
             // Create string with all the option values separated by a comma.
-            option_values.push_str(&format!("{},", comb[i]));
+            option_values.push(comb[i]);
             i += 1;
         }
-        // Remove the last comma.
-        option_values.pop();
         for flag in &flags {
             this_comb.push((flag.as_str(), ""));
         }
-        if !filter_combs.contains(&option_values) {
+        let mut match_found = false;
+        for filter_comb in &filter_combs {
+            // Check if all option values are in the filter combination.
+            match_found = filter_comb.iter()
+                .all(
+                    |x| option_values.contains(&&x.to_string())
+                );
+        }
+        if !match_found {
             combinations.push(this_comb);
         }
     }
