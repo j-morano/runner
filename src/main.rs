@@ -230,13 +230,20 @@ fn main() {
     // The command is the string before the first argument that starts with a
     // dash.
     let mut i = 0;
+    let mut current_command = Vec::new();
     while i<command_args.len() {
         // Check if command argument is equal to "--".
         if command_args[i] == "--" {
             i += 1;
+            command.push(current_command.clone());
             break;
+        } else if command_args[i] == "," {
+            i += 1;
+            command.push(current_command.clone());
+            current_command = Vec::new();
+            continue;
         }
-        command.push(&command_args[i]);
+        current_command.push(&command_args[i]);
         i += 1;
     }
     // The remaining arguments are the arguments for the command.
@@ -271,9 +278,11 @@ fn main() {
     }
 
     // Print the command that will be executed.
-    print!("$ ");
-    for arg in &command {
-        print!("{} ", arg);
+    for c in &command {
+        print!("$ ");
+        for arg in c {
+            print!("{} ", arg);
+        }
     }
     println!();
     // Pretty print multi_args.
@@ -390,57 +399,59 @@ fn main() {
     let mut commands_run = 0;
     // Array of commands that are currently running.
     let mut running_commands = Vec::new();
-    for combination in &combinations {
-        let mut command_obj = Command::new(&command[0]);
-        for arg in &command[1..] {
-            command_obj.arg(arg);
-        }
-        for (key, value) in combination {
-            // Add the key if it is not an empty string.
-            if !key.is_empty() {
-                command_obj.arg(key);
+    for c in command {
+        for combination in &combinations {
+            let mut command_obj = Command::new(&c[0]);
+            for arg in &c[1..] {
+                command_obj.arg(arg);
             }
-            if !value.is_empty() {
-                command_obj.arg(value);
-            }
-        }
-        println!();
-        if dry_run {
-            print_command(&command_obj);
-        } else {
-            if running_commands.len() >= runners {
-                // Wait for a command to finish.
-                let mut child: Child = running_commands.remove(0);
-                //https://doc.rust-lang.org/std/process/struct.Child.html
-                wait_for_child(&mut child);
-            }
-            // Print the command that will be executed without the quotes.
-            print_command(&command_obj);
-            let child = match command_obj
-                .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
-                .spawn()
-            {
-                Ok(child) => child,
-                Err(e) => {
-                    // If the error is because the command was not found,
-                    // exit the program.
-                    if e.kind() == ErrorKind::NotFound {
-                        println!(
-                            "Command not found: {}",
-                            command_obj.get_program().to_str().unwrap()
-                        );
-                        println!("Exiting...");
-                        exit(1);
-                    } else {
-                        continue;
-                    }
+            for (key, value) in combination {
+                // Add the key if it is not an empty string.
+                if !key.is_empty() {
+                    command_obj.arg(key);
                 }
-            };
-            // Run command detached
-            running_commands.push(child);
+                if !value.is_empty() {
+                    command_obj.arg(value);
+                }
+            }
+            println!();
+            if dry_run {
+                print_command(&command_obj);
+            } else {
+                if running_commands.len() >= runners {
+                    // Wait for a command to finish.
+                    let mut child: Child = running_commands.remove(0);
+                    //https://doc.rust-lang.org/std/process/struct.Child.html
+                    wait_for_child(&mut child);
+                }
+                // Print the command that will be executed without the quotes.
+                print_command(&command_obj);
+                let child = match command_obj
+                    .stdout(Stdio::inherit())
+                    .stderr(Stdio::inherit())
+                    .spawn()
+                {
+                    Ok(child) => child,
+                    Err(e) => {
+                        // If the error is because the command was not found,
+                        // exit the program.
+                        if e.kind() == ErrorKind::NotFound {
+                            println!(
+                                "Command not found: {}",
+                                command_obj.get_program().to_str().unwrap()
+                            );
+                            println!("Exiting...");
+                            exit(1);
+                        } else {
+                            continue;
+                        }
+                    }
+                };
+                // Run command detached
+                running_commands.push(child);
+            }
+            commands_run += 1;
         }
-        commands_run += 1;
     }
     if dry_run || !bg_run {
         for mut child in running_commands {
