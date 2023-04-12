@@ -292,6 +292,13 @@ fn main() {
         }
         println!();
     }
+    if allow_combs.len() > 0 {
+        println!("Allow runs:");
+        for comb in &allow_combs {
+            println!("  \"{}\"", comb.join(","));
+        }
+        println!();
+    }
 
     let mut options = Vec::new();
     let mut flags = Vec::new();
