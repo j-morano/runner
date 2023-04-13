@@ -259,6 +259,7 @@ fn main() {
     let mut multi_args = BTreeMap::new();
     let mut i = 0;
     let empty_string = "".to_string();
+    let mut positional_args = BTreeMap::new();
     loop {
         if i >= command_args.len() {
             break;
@@ -267,7 +268,19 @@ fn main() {
             multi_args.insert(i, (command_args[i], Vec::new()));
             for j in i+1..command_args.len() {
                 if !command_args[j].starts_with("-") {
-                    multi_args.get_mut(&i).unwrap().1.push(command_args[j]);
+                    // if contains , then split and add to multi_args.
+                    if command_args[j].contains(",") {
+                        positional_args.insert(i, (command_args[i].to_string(), Vec::new()));
+                        let options: Vec<_> = command_args[j].split(",").collect();
+                        for option in options {
+                            // Add option as &String
+                            positional_args.get_mut(&i).unwrap().1.push(option.to_string());
+                        }
+                        // Remove the added to multi_args.
+                        multi_args.remove(&i);
+                    } else {
+                        multi_args.get_mut(&i).unwrap().1.push(command_args[j].to_string());
+                    }
                 }
                 else {
                     i = j-1;
@@ -278,7 +291,10 @@ fn main() {
             if i == 0 {
                 println!("First argument does not start with a dash.");
                 println!("=> Using all arguments as a single main argument.");
-                multi_args.insert(0, (&empty_string, command_args.to_vec()));
+                multi_args.insert(0, (&empty_string, Vec::new()));
+                for j in 0..command_args.len() {
+                    multi_args.get_mut(&0).unwrap().1.push(command_args[j].to_string());
+                }
             }
         }
         i += 1;
@@ -293,6 +309,9 @@ fn main() {
     // Pretty print multi_args.
     for (_, value) in &multi_args {
         println!("  {}: {:?}", value.0, value.1);
+    }
+    for (_, value) in &positional_args {
+        println!("  {}: {:?} (positional)", value.0, value.1);
     }
     println!();
 
@@ -317,6 +336,7 @@ fn main() {
     let mut options = Vec::new();
     let mut flags = Vec::new();
     let mut multi_args_values = Vec::new();
+    let mut positional_args_values = Vec::new();
     for (_, value) in &multi_args {
         let values = &value.1.clone();
         // copy value.1 to values
@@ -328,7 +348,16 @@ fn main() {
             flags.push(value.0.clone());
         }
     }
-    let combs;
+    for (_, value) in &positional_args {
+        let values = &value.1.clone();
+        // copy value.1 to values
+        let values = values.clone();
+        if values.len() > 0 {
+            positional_args_values.push(values);
+            options.push(value.0.clone());
+        }
+    }
+    let mut combs;
     if ordered_runner {
         // Check that all the options have the same number of values.
         let length = multi_args_values[0].len();
@@ -343,7 +372,19 @@ fn main() {
         combs = ordered_combinations(&multi_args_values);
     } else {
         combs = cartesian_product(&multi_args_values);
-    }
+        let positional_combs = ordered_combinations(&positional_args_values);
+        let mut new_combs = Vec::new();
+        for comb in &combs {
+            for positional_comb in &positional_combs {
+                let mut new_comb = comb.clone();
+                for value in positional_comb {
+                    new_comb.push(value.clone());
+                }
+                new_combs.push(new_comb);
+            }
+        }
+        combs = new_combs;
+    } 
     let mut combinations = Vec::<Vec<(&str, &str)>>::new();
     for comb in &combs {
         let mut i = 0;
@@ -352,7 +393,7 @@ fn main() {
         for option in &options {
             this_comb.push((option.as_str(), comb[i].as_str()));
             // Create string with all the option values separated by a comma.
-            option_values.push(comb[i]);
+            option_values.push(comb[i].as_str());
             i += 1;
         }
         for flag in &flags {
@@ -363,7 +404,7 @@ fn main() {
             // Check if all option values are in the filter combination.
             match_found = filter_comb.iter()
                 .all(
-                    |x| option_values.contains(&&x.to_string())
+                    |x| option_values.contains(&&x)
                 );
             if match_found {
                 break;
@@ -376,12 +417,12 @@ fn main() {
             // Check if the first allow value is in the option values.
             //   If so, then check if all option values are in the allow
             //   combination.
-            let first_present = option_values.contains(&&allow_comb[0].to_string());
+            let first_present = option_values.contains(&&allow_comb[0]);
             if first_present {
                 // Check if all option values are in the allow combination.
                 match_found = !allow_comb.iter()
                     .all(
-                        |x| option_values.contains(&&x.to_string())
+                        |x| option_values.contains(&&x)
                     );
                 if match_found {
                     break;

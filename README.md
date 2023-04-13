@@ -22,6 +22,7 @@ Snippet 2.
 runner train.py -- --learning-rate 0.01 0.02 --epochs 4 8 16
 ```
 
+## --filter-runs
 
 Additionally, `runner` allows you to filter certain combinations of argument values using the option `--filter-runs`.
 For example, the program shown in Snippet 3 would be equivalent to the program shown in Snippet 4.
@@ -50,8 +51,13 @@ You can combine multiple filtering values with `+`, so that the command from Sni
 runner train.py --filter-runs 0.01,8+16 -- --learning-rate 0.01 0.02 --epochs 4 8 16
 ```
 
+## --allow-runs
 
-Finally, you can also tell `runner` to combine only the arguments that are in the same relative position using `--ordered-runner` option.
+TODO
+
+## --ordered-runner
+
+You can also tell `runner` to combine only the arguments that are in the same relative position using `--ordered-runner` option.
 Note that this requires the lengths of the different lists of argument values to be equal. 
 For example, Snippet 5 would be equivalent to Snippet 6.
 
@@ -68,3 +74,7 @@ Snippet 6.
 train.py --learning-rate 0.01 --epochs 4
 train.py --learning-rate 0.02 --epochs 8
 ```
+
+## Positional arguments
+
+TODO
