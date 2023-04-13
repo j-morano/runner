@@ -129,7 +129,11 @@ pub fn ordered_combinations<T: Clone>(lists: &[Vec<T>],) -> Vec<Vec<T>> {
     for i in 0..num_combinations {
         let mut comb: Vec<T> = Vec::new();
         for list in lists {
-            comb.push(list[i].clone());
+            if i < list.len() {
+                comb.push(list[i].clone());
+            } else {
+                comb.push(list[0].clone());
+            }
         }
         combs.push(comb);
     }
@@ -328,8 +332,11 @@ fn main() {
     if ordered_runner {
         // Check that all the options have the same number of values.
         let length = multi_args_values[0].len();
-        if !multi_args_values.iter().all(|x| x.len() == length) {
-            println!("Error: --ordered-runner requires all options to have the same number of values.");
+        if !multi_args_values.iter().all(|x| x.len() == length || x.len() == 1) {
+            println!(
+                "Error: --ordered-runner requires all options with more than one value to have\
+                \n       the same number of values."
+            );
             exit(1);
         }
 
