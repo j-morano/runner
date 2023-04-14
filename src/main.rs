@@ -14,8 +14,14 @@ Options:
     --dry-runner        Print the commands that would be executed without
                           actually executing them.
     --runners           Number of commands to run in parallel.
-    -v, --version       Print the version of runner.\
-For more information, see <https://github.com/j-morano/runner>
+    -v, --version       Print the version of runner.
+
+Exit status:
+    0   if OK,
+    1   runner errors (e.g., invalid arguments),
+    2   command run errors (e.g., a command failed).
+
+For more information, see <https://github.com/j-morano/runner>\
 ";
 
 
@@ -517,6 +523,6 @@ fn main() {
         for command in &failed_commands {
             println!("  $ {}", command);
         }
-        exit(1);
+        exit(2);
     }
 }
