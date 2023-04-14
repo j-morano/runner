@@ -13,10 +13,9 @@ Options:
     -h, --help          Print this help message.
     --dry-runner        Print the commands that would be executed without
                           actually executing them.
-    --ordered-runner    Combine only the arguments that are in the same
-                          relative position.
     --runners           Number of commands to run in parallel.
     -v, --version       Print the version of runner.\
+For more information, see <https://github.com/j-morano/runner>
 ";
 
 
@@ -191,7 +190,6 @@ fn main() {
     let mut filter = false;
     let mut allow_combs = Vec::new();
     let mut allow = false;
-    let mut ordered_runner = false;
     let mut parse_runners = false;
     for arg in command_args {
         if filter {
@@ -233,8 +231,6 @@ fn main() {
             filter = true; 
         } else if arg == "--allow-runs" {
             allow = true;
-        } else if arg == "--ordered-runner" {
-            ordered_runner = true;
         } else {
             new_command_args.push(arg);
         }
@@ -365,23 +361,13 @@ fn main() {
         }
     }
     let mut combs;
-    if ordered_runner {
-        // Check that all the options have the same number of values.
-        let length = multi_args_values[0].len();
-        if !multi_args_values.iter().all(|x| x.len() == length || x.len() == 1) {
-            println!(
-                "Error: --ordered-runner requires all options with more than one value to have\
-                \n       the same number of values."
-            );
-            exit(1);
-        }
-
-        combs = ordered_combinations(&multi_args_values);
-    } else {
-        combs = cartesian_product(&multi_args_values);
-        if positional_args_values.len() > 0 {
-            let positional_combs = ordered_combinations(&positional_args_values);
-            let mut new_combs = Vec::new();
+    combs = cartesian_product(&multi_args_values);
+    if positional_args_values.len() > 0 {
+        let positional_combs = ordered_combinations(&positional_args_values);
+        let mut new_combs = Vec::new();
+        if combs.len() == 0 {
+            combs = positional_combs.clone();
+        } else {
             for comb in &combs {
                 for positional_comb in &positional_combs {
                     let mut new_comb = comb.clone();
@@ -393,7 +379,7 @@ fn main() {
             }
             combs = new_combs;
         }
-    } 
+    }
     let mut combinations = Vec::<Vec<(&str, &str)>>::new();
     for comb in &combs {
         let mut i = 0;

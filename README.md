@@ -4,7 +4,6 @@
 More specifically, `runner` takes all the values of the arguments after `--` and combines them, running the program/command with each combination.
 For example:
 
-Snippet 1.
 ```sh
 runner train.py -- --learning-rate 0.01 0.02 --epochs 4 8 16
 
@@ -77,22 +76,6 @@ train.py --model resnet --epochs 8 --learning-rate 0.2
 # Notice that, in this, the learning rate 0.1 is only combined with vgg model.
 ```
 
-
-## --ordered-runner
-
-You can also tell `runner` to combine only the arguments that are in the same relative position using `--ordered-runner` option.
-Note that this requires the lengths of the different lists of argument values to be equal. 
-For example:
-
-```sh
-runner train.py --ordered-runner -- --learning-rate 0.01 0.02 --epochs 4 8
-
-# is equivalent to
-
-train.py --learning-rate 0.01 --epochs 4
-train.py --learning-rate 0.02 --epochs 8
-```
-
 ## Positional arguments
 
 You can also set positional option values.
@@ -112,3 +95,9 @@ train.py --model resnet --learning-rate 0.2 --epochs 12
 train.py --model resnet --learning-rate 0.3 --epochs 16
 # Notice that 0.1 is always combined with 8, 0.2 with 12 and 0.3 with 16.
 ```
+
+## Other options:
+
+- `--dry-runner`: Print the commands that would be executed without actually executing them.
+- `--runners`: Number of commands to run in parallel.
+- `--bg-runner`: Run the commands in the background.
