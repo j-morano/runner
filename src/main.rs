@@ -260,6 +260,7 @@ fn main() {
     let mut i = 0;
     let empty_string = "".to_string();
     let mut positional_args = BTreeMap::new();
+    let mut positional_size = 0;
     loop {
         if i >= command_args.len() {
             break;
@@ -272,6 +273,12 @@ fn main() {
                     if command_args[j].contains(",") {
                         positional_args.insert(i, (command_args[i].to_string(), Vec::new()));
                         let options: Vec<_> = command_args[j].split(",").collect();
+                        if positional_size == 0 {
+                            positional_size = options.len();
+                        } else if positional_size != options.len() {
+                            println!("Error: Positional arguments must have the same number of options.");
+                            exit(1);
+                        }
                         for option in options {
                             // Add option as &String
                             positional_args.get_mut(&i).unwrap().1.push(option.to_string());
@@ -372,18 +379,20 @@ fn main() {
         combs = ordered_combinations(&multi_args_values);
     } else {
         combs = cartesian_product(&multi_args_values);
-        let positional_combs = ordered_combinations(&positional_args_values);
-        let mut new_combs = Vec::new();
-        for comb in &combs {
-            for positional_comb in &positional_combs {
-                let mut new_comb = comb.clone();
-                for value in positional_comb {
-                    new_comb.push(value.clone());
+        if positional_args_values.len() > 0 {
+            let positional_combs = ordered_combinations(&positional_args_values);
+            let mut new_combs = Vec::new();
+            for comb in &combs {
+                for positional_comb in &positional_combs {
+                    let mut new_comb = comb.clone();
+                    for value in positional_comb {
+                        new_comb.push(value.clone());
+                    }
+                    new_combs.push(new_comb);
                 }
-                new_combs.push(new_comb);
             }
+            combs = new_combs;
         }
-        combs = new_combs;
     } 
     let mut combinations = Vec::<Vec<(&str, &str)>>::new();
     for comb in &combs {
@@ -518,7 +527,7 @@ fn main() {
         }
     }
     if failed_commands.len() > 0 {
-        println!("Failed commands:");
+        println!("Failed commands ({}):", failed_commands.len());
         for command in &failed_commands {
             println!("  $ {}", command);
         }
