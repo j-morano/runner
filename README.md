@@ -96,6 +96,39 @@ train.py --model resnet --learning-rate 0.3 --epochs 16
 # Notice that 0.1 is always combined with 8, 0.2 with 12 and 0.3 with 16.
 ```
 
+## Multiple commands and command-specific options
+
+You can introduce multiple commands separated by ` , ` (space-comma-space) with shared arguments and introduce command-specific options.
+An option is considered command-specific if there is a comma after the dash (e.g. `--,,option`, `-,,o`).
+The number of commas indicate the index (starting by 1) of the command with which it is associated.
+For example:
+
+```sh
+runner train.py , eval.py -- --model vgg resnet --learning-rate 0.1,0.2,0.3 --epochs 8,12,16 --,,test-data ImageNet CIFAR-10
+
+# is equivalent to
+
+train.py --model vgg --learning-rate 0.1 --epochs 8
+train.py --model vgg --learning-rate 0.2 --epochs 12
+train.py --model vgg --learning-rate 0.3 --epochs 16
+train.py --model resnet --learning-rate 0.1 --epochs 8
+train.py --model resnet --learning-rate 0.2 --epochs 12
+train.py --model resnet --learning-rate 0.3 --epochs 16
+eval.py --model vgg --learning-rate 0.1 --epochs 8 --test-data ImageNet
+eval.py --model vgg --learning-rate 0.2 --epochs 12 --test-data ImageNet
+eval.py --model vgg --learning-rate 0.3 --epochs 16 --test-data ImageNet
+eval.py --model resnet --learning-rate 0.1 --epochs 8 --test-data ImageNet
+eval.py --model resnet --learning-rate 0.2 --epochs 12 --test-data ImageNet
+eval.py --model resnet --learning-rate 0.3 --epochs 16 --test-data ImageNet
+eval.py --model vgg --learning-rate 0.1 --epochs 8 --test-data CIFAR-10
+eval.py --model vgg --learning-rate 0.2 --epochs 12 --test-data CIFAR-10
+eval.py --model vgg --learning-rate 0.3 --epochs 16 --test-data CIFAR-10
+eval.py --model resnet --learning-rate 0.1 --epochs 8 --test-data CIFAR-10
+eval.py --model resnet --learning-rate 0.2 --epochs 12 --test-data CIFAR-10
+eval.py --model resnet --learning-rate 0.3 --epochs 16 --test-data CIFAR-10
+# Notice that '--test-data' option is only combined with 'eval.py' command.
+```
+
 ## Other options:
 
 - `--dry-runner`: Print the commands that would be executed without actually executing them.

@@ -242,17 +242,25 @@ fn main() {
         }
     }
     let command_args = new_command_args;
-    let mut command = Vec::new();
+    let mut commands = Vec::new();
     // The command is the string before the first argument that starts with a
     // dash.
     let mut i = 0;
+    let mut current_command = Vec::new();
     while i<command_args.len() {
         // Check if command argument is equal to "--".
         if command_args[i] == "--" {
+            commands.push(current_command.clone());
             i += 1;
             break;
+        // Allow for multiple commands to be run.
+        } else if command_args[i] == "," {
+            commands.push(current_command.clone());
+            current_command = Vec::new();
+            i += 1;
+            continue;
         }
-        command.push(&command_args[i]);
+        current_command.push(&command_args[i]);
         i += 1;
     }
     // The remaining arguments are the arguments for the command.
@@ -263,22 +271,39 @@ fn main() {
     let empty_string = "".to_string();
     let mut positional_args = BTreeMap::new();
     let mut positional_size = 0;
+    let mut command_specific_args = Vec::new();
     loop {
         if i >= command_args.len() {
             break;
         }
         if command_args[i].starts_with("-") {
-            multi_args.insert(i, (command_args[i], Vec::new()));
+            let mut arg = command_args[i].to_string();
+            // Command specific argument.
+            if command_args[i].contains("-,") {
+                // Count the number of commas.
+                let mut num_commas = 0;
+                for c in command_args[i].chars() {
+                    if c == ',' {
+                        num_commas += 1;
+                    }
+                }
+                // Remove the commas.
+                arg = command_args[i].replace(",", "");
+                command_specific_args.push((arg.clone(), num_commas));
+            }
+            multi_args.insert(i, (arg.clone(), Vec::new()));
             for j in i+1..command_args.len() {
                 if !command_args[j].starts_with("-") {
                     // if contains , then split and add to multi_args.
                     if command_args[j].contains(",") {
-                        positional_args.insert(i, (command_args[i].to_string(), Vec::new()));
+                        positional_args.insert(i, (arg.clone(), Vec::new()));
                         let options: Vec<_> = command_args[j].split(",").collect();
                         if positional_size == 0 {
                             positional_size = options.len();
                         } else if positional_size != options.len() {
-                            println!("Error: Positional arguments must have the same number of options.");
+                            println!(
+                                "Error: Positional arguments must have the same number of options."
+                            );
                             exit(1);
                         }
                         for option in options {
@@ -300,7 +325,7 @@ fn main() {
             if i == 0 {
                 println!("First argument does not start with a dash.");
                 println!("=> Using all arguments as a single main argument.");
-                multi_args.insert(0, (&empty_string, Vec::new()));
+                multi_args.insert(0, (empty_string.clone(), Vec::new()));
                 for j in 0..command_args.len() {
                     multi_args.get_mut(&0).unwrap().1.push(command_args[j].to_string());
                 }
@@ -310,14 +335,21 @@ fn main() {
     }
 
     // Print the command that will be executed.
-    print!("$ ");
-    for c in &command {
-        print!("{} ", c);
+    for c in &commands {
+        print!("$ ");
+        for arg in c {
+            print!("{} ", arg);
+        }
+        println!();
     }
-    println!();
     // Pretty print multi_args.
     for (_, value) in &multi_args {
-        println!("  {}: {:?}", value.0, value.1);
+        let specific = command_specific_args.iter().find(|x| x.0 == value.0);
+        print!("  {}: {:?}", value.0, value.1);
+        if let Some((_, num_commas)) = specific {
+            print!(" (specific: {})", num_commas);
+        }
+        println!();
     }
     for (_, value) in &positional_args {
         println!("  {}: {:?} (positional)", value.0, value.1);
@@ -342,169 +374,205 @@ fn main() {
         println!();
     }
 
-    let mut options = Vec::new();
-    let mut flags = Vec::new();
-    let mut multi_args_values = Vec::new();
-    let mut positional_args_values = Vec::new();
-    for (_, value) in &multi_args {
-        let values = &value.1.clone();
-        // copy value.1 to values
-        let values = values.clone();
-        if values.len() > 0 {
-            multi_args_values.push(values);
-            options.push(value.0.clone());
-        } else {
-            flags.push(value.0.clone());
-        }
-    }
-    for (_, value) in &positional_args {
-        let values = &value.1.clone();
-        // copy value.1 to values
-        let values = values.clone();
-        if values.len() > 0 {
-            positional_args_values.push(values);
-            options.push(value.0.clone());
-        }
-    }
-    let mut combs;
-    combs = cartesian_product(&multi_args_values);
-    if positional_args_values.len() > 0 {
-        let positional_combs = ordered_combinations(&positional_args_values);
-        let mut new_combs = Vec::new();
-        if combs.len() == 0 {
-            combs = positional_combs.clone();
-        } else {
-            for comb in &combs {
-                for positional_comb in &positional_combs {
-                    let mut new_comb = comb.clone();
-                    for value in positional_comb {
-                        new_comb.push(value.clone());
-                    }
-                    new_combs.push(new_comb);
-                }
-            }
-            combs = new_combs;
-        }
-    }
-    let mut combinations = Vec::<Vec<(&str, &str)>>::new();
-    for comb in &combs {
-        let mut i = 0;
-        let mut option_values = Vec::new();
-        let mut this_comb = Vec::new();
-        for option in &options {
-            this_comb.push((option.as_str(), comb[i].as_str()));
-            // Create string with all the option values separated by a comma.
-            option_values.push(comb[i].as_str());
-            i += 1;
-        }
-        for flag in &flags {
-            this_comb.push((flag.as_str(), ""));
-        }
-        let mut match_found = false;
-        for filter_comb in &filter_combs {
-            // Check if all option values are in the filter combination.
-            match_found = filter_comb.iter()
-                .all(
-                    |x| option_values.contains(&&x)
-                );
-            if match_found {
-                break;
-            }
-        }
-        for allow_comb in &allow_combs {
-            // Check if any option values are in the allow combination.
-            // If so, then check if all option values are in the allow
-            //   combination.
-            // Check if the first allow value is in the option values.
-            //   If so, then check if all option values are in the allow
-            //   combination.
-            let first_present = option_values.contains(&&allow_comb[0]);
-            if first_present {
-                // Check if all option values are in the allow combination.
-                match_found = !allow_comb.iter()
-                    .all(
-                        |x| option_values.contains(&&x)
-                    );
-                if match_found {
-                    break;
-                }
-            }
-        }
-        if !match_found {
-            combinations.push(this_comb);
-        }
-    }
-
-    if combinations.len() > 0 {
-        println!("Combinations ({}):", combinations.len());
-        for combination in &combinations {
-            println!("  {:?}", combination);
-        }
-    } else {
-        // Just run the command without any arguments.
-        println!("Running command with no arguments.");
-        combinations.push(vec![]);
-    }
-
     let mut commands_run = 0;
     // Array of commands that are currently running.
     let mut running_commands = Vec::new();
     let mut failed_commands = Vec::new();
-    for combination in &combinations {
-        // Get c as string
-        let mut command_obj = Command::new(&command[0]);
-        for arg in &command[1..] {
-            command_obj.arg(arg);
-        }
-        for (key, value) in combination {
-            // Add the key if it is not an empty string.
-            if !key.is_empty() {
-                command_obj.arg(key);
-            }
-            if !value.is_empty() {
-                command_obj.arg(value);
-            }
+    let mut main_command_num = 1;
+    for command in commands {
+        let mut options = Vec::new();
+        let mut flags = Vec::new();
+
+        //// Print the command that will be executed.
+        print!("\n$ ");
+        for arg in &command {
+            print!("{} ", arg);
         }
         println!();
-        if dry_run {
-            print_command(&command_obj);
-        } else {
-            if running_commands.len() >= runners {
-                // Wait for a command to finish.
-                let mut child: (Child, String) = running_commands.remove(0);
-                //https://doc.rust-lang.org/std/process/struct.Child.html
-                if !wait_for_child(&mut child.0) {
-                    failed_commands.push(child.1);
+
+        //// Remove all arguments from multi_args_values and
+        //// positional_args_values that are in command_specific_args and whose
+        //// number of commas is not equal to main_command_num.
+        let mut multi_args_values = Vec::new();
+        let mut positional_args_values = Vec::new();
+        for (_, value) in &multi_args {
+            let mut skip = false;
+            for (arg, num_commas) in &command_specific_args {
+                if &value.0 == arg {
+                    skip = num_commas != &main_command_num;
                 }
             }
-            // Print the command that will be executed without the quotes.
-            let c_str = print_command(&command_obj);
-            let child = match command_obj
-                .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
-                .spawn()
-                {
-                    Ok(child) => child,
-                    Err(e) => {
-                        // If the error is because the command was not found,
-                        // exit the program.
-                        if e.kind() == ErrorKind::NotFound {
-                            println!(
-                                "Command not found: {}",
-                                command_obj.get_program().to_str().unwrap()
-                                );
-                            println!("Exiting...");
-                            exit(1);
-                        } else {
-                            continue;
-                        }
-                    }
-                };
-            // Run command detached
-            running_commands.push((child, c_str));
+            if skip {
+                continue;
+            }
+            let values = &value.1.clone();
+            // copy value.1 to values
+            let values = values.clone();
+            if values.len() > 0 {
+                multi_args_values.push(values);
+                options.push(value.0.clone());
+            } else {
+                flags.push(value.0.clone());
+            }
         }
-        commands_run += 1;
-    }
+        for (_, value) in &positional_args {
+            let mut skip = false;
+            for (arg, num_commas) in &command_specific_args {
+                if &value.0 == arg {
+                    skip = num_commas != &main_command_num;
+                }
+            }
+            if skip {
+                continue;
+            }
+            let values = &value.1.clone();
+            // copy value.1 to values
+            let values = values.clone();
+            if values.len() > 0 {
+                positional_args_values.push(values);
+                options.push(value.0.clone());
+            }
+        }
+        main_command_num += 1;
+
+        let mut combs;
+        combs = cartesian_product(&multi_args_values);
+        if positional_args_values.len() > 0 {
+            let positional_combs = ordered_combinations(&positional_args_values);
+            let mut new_combs = Vec::new();
+            if combs.len() == 0 {
+                combs = positional_combs.clone();
+            } else {
+                for comb in &combs {
+                    for positional_comb in &positional_combs {
+                        let mut new_comb = comb.clone();
+                        for value in positional_comb {
+                            new_comb.push(value.clone());
+                        }
+                        new_combs.push(new_comb);
+                    }
+                }
+                combs = new_combs;
+            }
+        }
+        let mut combinations = Vec::<Vec<(&str, &str)>>::new();
+        for comb in &combs {
+            let mut i = 0;
+            let mut option_values = Vec::new();
+            let mut this_comb = Vec::new();
+            // Get comb length.
+            for option in &options {
+                this_comb.push((option.as_str(), comb[i].as_str()));
+                // Create string with all the option values separated by a comma.
+                option_values.push(comb[i].as_str());
+                i += 1;
+            }
+            for flag in &flags {
+                this_comb.push((flag.as_str(), ""));
+            }
+            let mut match_found = false;
+            for filter_comb in &filter_combs {
+                // Check if all option values are in the filter combination.
+                match_found = filter_comb.iter()
+                    .all(
+                        |x| option_values.contains(&&x)
+                        );
+                if match_found {
+                    break;
+                }
+            }
+            for allow_comb in &allow_combs {
+                // Check if any option values are in the allow combination.
+                // If so, then check if all option values are in the allow
+                //   combination.
+                // Check if the first allow value is in the option values.
+                //   If so, then check if all option values are in the allow
+                //   combination.
+                let first_present = option_values.contains(&&allow_comb[0]);
+                if first_present {
+                    // Check if all option values are in the allow combination.
+                    match_found = !allow_comb.iter()
+                        .all(
+                            |x| option_values.contains(&&x)
+                            );
+                    if match_found {
+                        break;
+                    }
+                }
+            }
+            if !match_found {
+                combinations.push(this_comb);
+            }
+        }
+        if combinations.len() > 0 {
+            println!("Combinations ({}):", combinations.len());
+            for combination in &combinations {
+                println!("  {:?}", combination);
+            }
+        } else {
+            // Just run the command without any arguments.
+            println!("Running command with no arguments.");
+            combinations.push(vec![]);
+        }
+        println!();
+
+        for combination in &combinations {
+            // Get c as string
+            let mut command_obj = Command::new(&command[0]);
+            for arg in &command[1..] {
+                command_obj.arg(arg);
+            }
+            for (key, value) in combination {
+                // Add the key if it is not an empty string.
+                if !key.is_empty() {
+                    command_obj.arg(key);
+                }
+                if !value.is_empty() {
+                    command_obj.arg(value);
+                }
+            }
+            println!();
+            if dry_run {
+                print_command(&command_obj);
+            } else {
+                if running_commands.len() >= runners {
+                    // Wait for a command to finish.
+                    let mut child: (Child, String) = running_commands.remove(0);
+                    //https://doc.rust-lang.org/std/process/struct.Child.html
+                    if !wait_for_child(&mut child.0) {
+                        failed_commands.push(child.1);
+                    }
+                }
+                // Print the command that will be executed without the quotes.
+                let c_str = print_command(&command_obj);
+                let child = match command_obj
+                    .stdout(Stdio::inherit())
+                    .stderr(Stdio::inherit())
+                    .spawn()
+                    {
+                        Ok(child) => child,
+                        Err(e) => {
+                            // If the error is because the command was not found,
+                            // exit the program.
+                            if e.kind() == ErrorKind::NotFound {
+                                println!(
+                                    "Command not found: {}",
+                                    command_obj.get_program().to_str().unwrap()
+                                );
+                                println!("Exiting...");
+                                exit(1);
+                            } else {
+                                continue;
+                            }
+                        }
+                    };
+                // Run command detached
+                running_commands.push((child, c_str));
+            }
+            commands_run += 1;
+        }
+    } // end for command in commands
+
     if dry_run || !bg_run {
         for mut child in running_commands {
             if !wait_for_child(&mut child.0) {
