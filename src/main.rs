@@ -167,6 +167,42 @@ pub fn parse_rules<'a>(arg: &'a str, rules_combs: &mut Vec<Vec<&'a str>>) {
     }
 }
 
+/// Check if the given string matches the following regex: -*[0-9]+,.*
+fn get_specific_arg(arg: String) -> (String, i32) {
+    let new_arg;
+    let fail_result = (String::new(), -1);
+    let mut clean_arg = String::new();
+    if arg.starts_with("--") {
+        new_arg = arg[2..].to_string();
+        clean_arg.push_str("--");
+    } else if arg.starts_with("-") {
+        new_arg = arg[1..].to_string();
+        clean_arg.push_str("-");
+    } else {
+        return fail_result;
+    }
+    let chars = new_arg.chars();
+    let mut number = String::new();
+    for (i, c) in chars.enumerate() {
+        if !c.is_numeric() {
+            if c == ',' {
+                return match number.parse::<i32>() {
+                    Ok(n) => {
+                        clean_arg.push_str(&new_arg[i+1..]);
+                        (clean_arg, n)
+                    },
+                    Err(_) => fail_result,
+                };
+            } else {
+                return fail_result;
+            }
+        } else {
+            number.push(c);
+        }
+    }
+    return fail_result;
+}
+
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -279,17 +315,13 @@ fn main() {
         if command_args[i].starts_with("-") {
             let mut arg = command_args[i].to_string();
             // Command specific argument.
-            if command_args[i].contains("-,") {
-                // Count the number of commas.
-                let mut num_commas = 0;
-                for c in command_args[i].chars() {
-                    if c == ',' {
-                        num_commas += 1;
-                    }
-                }
-                // Remove the commas.
-                arg = command_args[i].replace(",", "");
-                command_specific_args.push((arg.clone(), num_commas));
+            // Check if the argument contains this regex: -[0-9]+,
+            let (specific_arg, specific_arg_idx) = get_specific_arg(arg.clone());
+            println!("specific_arg_idx: {}, specific_arg: {}", specific_arg_idx, specific_arg);
+            if specific_arg_idx != -1 {
+                arg = specific_arg.clone();
+                command_specific_args.push((specific_arg, specific_arg_idx));
+                println!("command_specific_args: {:?}", command_specific_args);
             }
             multi_args.insert(i, (arg.clone(), Vec::new()));
             for j in i+1..command_args.len() {
@@ -378,7 +410,7 @@ fn main() {
     // Array of commands that are currently running.
     let mut running_commands = Vec::new();
     let mut failed_commands = Vec::new();
-    let mut main_command_num = 1;
+    let mut main_command_num = 0;
     let mut combinations_sets = BTreeMap::new();
     let mut command_index = 0;
     for command in &commands {

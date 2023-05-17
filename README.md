@@ -99,12 +99,12 @@ train.py --model resnet --learning-rate 0.3 --epochs 16
 ## Multiple commands and command-specific options
 
 You can introduce multiple commands separated by ` , ` (space-comma-space) with shared arguments and introduce command-specific options.
-An option is considered command-specific if there is a comma after the dash (e.g. `--,,option`, `-,,o`).
-The number of commas indicate the index (starting by 1) of the command with which it is associated.
+An option is considered command-specific if there is a number and a comma after the dash (e.g. `--1,option`, `-1,o`).
+The number before the comma indicates the index (starting by 0) of the command with which it is associated.
 For example:
 
 ```sh
-runner train.py , eval.py -- --model vgg resnet --learning-rate 0.1,0.2,0.3 --epochs 8,12,16 --,,test-data ImageNet CIFAR-10
+runner train.py , eval.py -- --model vgg resnet --learning-rate 0.1,0.2,0.3 --epochs 8,12,16 --1,test-data ImageNet CIFAR-10
 
 # is equivalent to
 
