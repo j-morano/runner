@@ -317,11 +317,9 @@ fn main() {
             // Command specific argument.
             // Check if the argument contains this regex: -[0-9]+,
             let (specific_arg, specific_arg_idx) = get_specific_arg(arg.clone());
-            println!("specific_arg_idx: {}, specific_arg: {}", specific_arg_idx, specific_arg);
             if specific_arg_idx != -1 {
                 arg = specific_arg.clone();
                 command_specific_args.push((specific_arg, specific_arg_idx));
-                println!("command_specific_args: {:?}", command_specific_args);
             }
             multi_args.insert(i, (arg.clone(), Vec::new()));
             for j in i+1..command_args.len() {
