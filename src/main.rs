@@ -379,13 +379,15 @@ fn main() {
     let mut running_commands = Vec::new();
     let mut failed_commands = Vec::new();
     let mut main_command_num = 1;
-    for command in commands {
+    let mut combinations_sets = BTreeMap::new();
+    let mut command_index = 0;
+    for command in &commands {
         let mut options = Vec::new();
         let mut flags = Vec::new();
 
         //// Print the command that will be executed.
-        print!("\n$ ");
-        for arg in &command {
+        print!("$ ");
+        for arg in command {
             print!("{} ", arg);
         }
         println!();
@@ -455,20 +457,20 @@ fn main() {
                 combs = new_combs;
             }
         }
-        let mut combinations = Vec::<Vec<(&str, &str)>>::new();
-        for comb in &combs {
+        let mut combinations = Vec::<Vec<(String, String)>>::new();
+        for comb in combs {
             let mut i = 0;
             let mut option_values = Vec::new();
             let mut this_comb = Vec::new();
             // Get comb length.
             for option in &options {
-                this_comb.push((option.as_str(), comb[i].as_str()));
+                this_comb.push((option.clone(), comb[i].clone()));
                 // Create string with all the option values separated by a comma.
                 option_values.push(comb[i].as_str());
                 i += 1;
             }
             for flag in &flags {
-                this_comb.push((flag.as_str(), ""));
+                this_comb.push((flag.clone(), String::from("")));
             }
             let mut match_found = false;
             for filter_comb in &filter_combs {
@@ -515,6 +517,16 @@ fn main() {
             combinations.push(vec![]);
         }
         println!();
+
+        combinations_sets.insert(command_index, (command.clone(), combinations));
+        command_index += 1;
+    } // end for command in commands
+
+
+    //// Run the commands.
+    for (_idx, combinations_set) in combinations_sets {
+        let command = combinations_set.0;
+        let combinations = combinations_set.1;
 
         for combination in &combinations {
             // Get c as string
@@ -571,7 +583,8 @@ fn main() {
             }
             commands_run += 1;
         }
-    } // end for command in commands
+    }
+
 
     if dry_run || !bg_run {
         for mut child in running_commands {
