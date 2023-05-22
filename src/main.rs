@@ -302,6 +302,7 @@ fn main() {
     // The remaining arguments are the arguments for the command.
     let command_args = &command_args[i..];
 
+    let separator_string = "[BREAK!]".to_string();
     let mut multi_args = BTreeMap::new();
     let mut i = 0;
     let empty_string = "".to_string();
@@ -366,7 +367,12 @@ fn main() {
                             if group == &empty_string {
                                 *group = command_args[j].to_string();
                             } else {
-                                *group = format!("{} {}", group, command_args[j]);
+                                *group = format!(
+                                    "{}{}{}",
+                                    group,
+                                    separator_string,
+                                    command_args[j]
+                                );
                             }
                         } else {
                             multi_args.get_mut(&i).unwrap().1.push(command_args[j].to_string());
@@ -601,7 +607,15 @@ fn main() {
                     command_obj.arg(key);
                 }
                 if !value.is_empty() {
-                    command_obj.arg(value);
+                    if value.contains(&separator_string) {
+                        let real_values: Vec<&str> = value.split(&separator_string).collect();
+                        for real_value in real_values {
+                            command_obj.arg(real_value);
+                        }
+
+                    } else {
+                        command_obj.arg(value);
+                    }
                 }
             }
             println!();
