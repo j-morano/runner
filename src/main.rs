@@ -308,12 +308,19 @@ fn main() {
     let mut positional_args = BTreeMap::new();
     let mut positional_size = 0;
     let mut command_specific_args = Vec::new();
+    let mut distributed_args = Vec::new();
     loop {
         if i >= command_args.len() {
             break;
         }
         if command_args[i].starts_with("-") {
             let mut arg = command_args[i].to_string();
+            let mut is_distributed = false;
+            if arg.contains("%") {
+                arg = arg.replace("%", "");
+                is_distributed = true;
+                distributed_args.push(arg.to_string().clone());
+            }
             // Command specific argument.
             // Check if the argument contains this regex: -[0-9]+,
             let (specific_arg, specific_arg_idx) = get_specific_arg(arg.clone());
@@ -322,9 +329,11 @@ fn main() {
                 command_specific_args.push((specific_arg, specific_arg_idx));
             }
             multi_args.insert(i, (arg.clone(), Vec::new()));
+            let initial_j = i+1;
             for j in i+1..command_args.len() {
                 if !command_args[j].starts_with("-") {
-                    // if contains , then split and add to multi_args.
+                    // if contains a comma, then split and add to positional
+                    // arguments.
                     if command_args[j].contains(",") {
                         positional_args.insert(i, (arg.clone(), Vec::new()));
                         let options: Vec<_> = command_args[j].split(",").collect();
@@ -343,10 +352,27 @@ fn main() {
                         // Remove the added to multi_args.
                         multi_args.remove(&i);
                     } else {
-                        multi_args.get_mut(&i).unwrap().1.push(command_args[j].to_string());
+                        if is_distributed {
+                            // Get modulo of j-initial_i and runners.
+                            let runner_idx = (j-initial_j) % runners;
+                            // Add to the runner_idx-th string.
+                            let group = match multi_args.get_mut(&i).unwrap().1.get_mut(runner_idx) {
+                                Some(group) => group,
+                                None => {
+                                    multi_args.get_mut(&i).unwrap().1.push(empty_string.clone());
+                                    multi_args.get_mut(&i).unwrap().1.last_mut().unwrap()
+                                }
+                            };
+                            if group == &empty_string {
+                                *group = command_args[j].to_string();
+                            } else {
+                                *group = format!("{} {}", group, command_args[j]);
+                            }
+                        } else {
+                            multi_args.get_mut(&i).unwrap().1.push(command_args[j].to_string());
+                        }
                     }
-                }
-                else {
+                } else {
                     i = j-1;
                     break;
                 }
@@ -374,10 +400,15 @@ fn main() {
     }
     // Pretty print multi_args.
     for (_, value) in &multi_args {
-        let specific = command_specific_args.iter().find(|x| x.0 == value.0);
+        let current_arg = value.0.clone();
+        let specific = command_specific_args.iter().find(|x| x.0 == current_arg);
+        let is_distributed = distributed_args.iter().find(|x| x.to_string() == current_arg) != None;
         print!("  {}: {:?}", value.0, value.1);
         if let Some((_, num_commas)) = specific {
             print!(" (specific: {})", num_commas);
+        }
+        if is_distributed {
+            print!(" (distributed)");
         }
         println!();
     }
