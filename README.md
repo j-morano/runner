@@ -129,6 +129,41 @@ eval.py --model resnet --learning-rate 0.3 --epochs 16 --test-data CIFAR-10
 # Notice that '--test-data' option is only combined with 'eval.py' command.
 ```
 
+## Distributed arguments
+
+You can combine multiple arguments of an option in a single command depending on the number of runners for parallel processing. That is, the list of arguments for the option is split in approximately equal parts that are then distributed among the number of runners. To use this feature, you have to put the character `%` after the dashes of the option (e.g., `-%o`, `--%option`). For example:
+
+
+```sh
+runner --runners 1 preprocess.py -- --%data-dirs ImageNet CIFAR-10 Places Oxford102Flower CelebA Caltech-256
+
+# is equivalent to
+
+preprocess.py --data-dirs ImageNet CIFAR-10 Places Oxford102Flower CelebA Caltech-256
+
+#--------------------------------------
+
+runner --runners 2 preprocess.py -- --%data-dirs ImageNet CIFAR-10 Places Oxford102Flower CelebA Caltech-256
+
+# is equivalent to
+
+preprocess.py --data-dirs ImageNet Places CelebA
+preprocess.py --data-dirs CIFAR-10 Oxford102Flower Caltech-256
+
+# Notice that both commands are run in parallel.
+
+#--------------------------------------
+
+runner --runners 3 preprocess.py -- --%data-dirs ImageNet CIFAR-10 Places Oxford102Flower CelebA Caltech-256
+
+preprocess.py --data-dirs ImageNet Oxford102Flower
+preprocess.py --data-dirs CIFAR-10 CelebA
+preprocess.py --data-dirs Places Caltech-256
+
+# Again, these commands are run in parallel.
+```
+
+
 ## Other options:
 
 - `--dry-runner`: Print the commands that would be executed without actually executing them.
