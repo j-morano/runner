@@ -156,6 +156,8 @@ preprocess.py --data-dirs CIFAR-10 Oxford102Flower Caltech-256
 
 runner --runners 3 preprocess.py -- --%data-dirs ImageNet CIFAR-10 Places Oxford102Flower CelebA Caltech-256
 
+# is equivalent to
+
 preprocess.py --data-dirs ImageNet Oxford102Flower
 preprocess.py --data-dirs CIFAR-10 CelebA
 preprocess.py --data-dirs Places Caltech-256
