@@ -1,6 +1,6 @@
 use std::env;
 use std::collections::BTreeMap;
-use std::io::{ErrorKind, BufReader, BufRead};
+use std::io::{ErrorKind, BufReader, BufRead, Write};
 use std::process::{Command, Stdio, Child, exit};
 use std::fs::File;
 
@@ -169,28 +169,15 @@ pub fn parse_rules<'a>(arg: &'a str, rules_combs: &mut Vec<Vec<&'a str>>) {
 }
 
 /// Check if the given string matches the following regex: -*[0-9]+,.*
-fn get_specific_arg(arg: String) -> (String, i32) {
-    let new_arg;
-    let fail_result = (String::new(), -1);
-    let mut clean_arg = String::new();
-    if arg.starts_with("--") {
-        new_arg = arg[2..].to_string();
-        clean_arg.push_str("--");
-    } else if arg.starts_with("-") {
-        new_arg = arg[1..].to_string();
-        clean_arg.push_str("-");
-    } else {
-        return fail_result;
-    }
-    let chars = new_arg.chars();
+fn get_specific_arg(arg: String) -> i32 {
+    let fail_result = -1;
     let mut number = String::new();
-    for (i, c) in chars.enumerate() {
+    for c in arg.chars() {
         if !c.is_numeric() {
             if c == ',' {
                 return match number.parse::<i32>() {
                     Ok(n) => {
-                        clean_arg.push_str(&new_arg[i+1..]);
-                        (clean_arg, n)
+                        n
                     },
                     Err(_) => fail_result,
                 };
@@ -312,27 +299,57 @@ fn main() {
     let mut command_specific_args = Vec::new();
     let mut distributed_args = Vec::new();
     let mut new_command_args;
+    let mut use_temp_files = false;
     loop {
         if i >= command_args.len() {
             break;
         }
         if command_args[i].starts_with("-") {
+            let allowed_option_chars = "@%:,0123456789".to_string();
             let mut arg = command_args[i].to_string();
             let mut is_distributed = false;
-            if arg.contains("%") {
-                arg = arg.replace("%", "");
+            let mut option_options: String = "".to_string();
+            let mut dash_start = "".to_string();
+            let mut real_option_start_idx = 0;
+
+            //// Parse runner options for the option and get the clean option.
+            for c in arg.chars() {
+                if c == '-' {
+                    dash_start.push(c);
+                    if dash_start.len() > 2 {
+                        println!("Error: invalid option: {}", arg);
+                        exit(1);
+                    }
+                } else if allowed_option_chars.contains(c) {
+                    option_options.push(c);
+                } else {
+                    break;
+                }
+                real_option_start_idx += 1;
+            }
+            // Concatenate dash_start and the arg after real_option_start_idx.
+            arg = format!("{}{}", dash_start, &arg[real_option_start_idx..]);
+
+            if option_options.contains("%") {
                 is_distributed = true;
                 distributed_args.push(arg.to_string().clone());
             }
             // Command specific argument.
             // Check if the argument contains this regex: -[0-9]+,
-            let (specific_arg, specific_arg_idx) = get_specific_arg(arg.clone());
+            let specific_arg_idx = get_specific_arg(option_options.clone());
             if specific_arg_idx != -1 {
-                arg = specific_arg.clone();
-                command_specific_args.push((specific_arg, specific_arg_idx));
+                command_specific_args.push((arg.clone(), specific_arg_idx));
             }
-            if arg.contains("@") {
-                arg = arg.replace("@", "");
+            if option_options.contains(":") {
+                use_temp_files = true;
+                let mut temp_file_path = env::temp_dir();
+                temp_file_path.push("distributed");
+                // Empty directory if it exists.
+                if temp_file_path.exists() {
+                    let _ = std::fs::remove_dir_all(&temp_file_path);
+                }
+            }
+            if option_options.contains("@") {
                 // Read arguments from file.
                 let file = match File::open(command_args[i+1].clone()) {
                     Err(why) => panic!("couldn't open {}: {}", arg, why),
@@ -378,23 +395,44 @@ fn main() {
                         if is_distributed {
                             // Get modulo of j-initial_i and runners.
                             let runner_idx = (j-initial_j) % runners;
-                            // Add to the runner_idx-th string.
-                            let group = match multi_args.get_mut(&i).unwrap().1.get_mut(runner_idx) {
-                                Some(group) => group,
-                                None => {
-                                    multi_args.get_mut(&i).unwrap().1.push(empty_string.clone());
-                                    multi_args.get_mut(&i).unwrap().1.last_mut().unwrap()
+                            if use_temp_files {
+                                let mut temp_file_path = env::temp_dir();
+                                temp_file_path.push("distributed");
+                                // Create directory using temp_file_path
+                                std::fs::create_dir_all(temp_file_path.clone()).unwrap();
+                                temp_file_path.push(format!("{}", runner_idx));
+                                if !temp_file_path.exists() {
+                                    multi_args.get_mut(&i).unwrap().1.push(
+                                        temp_file_path.to_str().unwrap().to_string()
+                                    );
                                 }
-                            };
-                            if group == &empty_string {
-                                *group = command_args[j].to_string();
+                                // Create file using temp_file_path
+                                let mut temp_file = std::fs::OpenOptions::new()
+                                    .write(true)
+                                    .create(true)
+                                    .append(true)
+                                    .open(temp_file_path.clone())
+                                    .unwrap();
+                                writeln!(temp_file, "{}", command_args[j]).unwrap();
                             } else {
-                                *group = format!(
-                                    "{}{}{}",
-                                    group,
-                                    separator_string,
-                                    command_args[j]
-                                );
+                                // Add to the runner_idx-th string.
+                                let group = match multi_args.get_mut(&i).unwrap().1.get_mut(runner_idx) {
+                                    Some(group) => group,
+                                    None => {
+                                        multi_args.get_mut(&i).unwrap().1.push(empty_string.clone());
+                                        multi_args.get_mut(&i).unwrap().1.last_mut().unwrap()
+                                    }
+                                };
+                                if group == &empty_string {
+                                    *group = command_args[j].to_string();
+                                } else {
+                                    *group = format!(
+                                        "{}{}{}",
+                                        group,
+                                        separator_string,
+                                        command_args[j]
+                                    );
+                                }
                             }
                         } else {
                             multi_args.get_mut(&i).unwrap().1.push(command_args[j].to_string());
@@ -691,7 +729,7 @@ fn main() {
                 failed_commands.push(child.1);
             }
         }
-        print!("\n{} commands run.", commands_run);
+        print!("\n{} commands run by {} runners.", commands_run, runners);
         if dry_run {
             println!(" (dry run)");
         } else {
