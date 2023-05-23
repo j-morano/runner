@@ -1,7 +1,8 @@
 use std::env;
 use std::collections::BTreeMap;
-use std::io::ErrorKind;
+use std::io::{ErrorKind, BufReader, BufRead};
 use std::process::{Command, Stdio, Child, exit};
+use std::fs::File;
 
 
 const HELP: &str = "\
@@ -274,7 +275,7 @@ fn main() {
         } else if arg == "--allow-runs" {
             allow = true;
         } else {
-            new_command_args.push(arg);
+            new_command_args.push(arg.clone());
         }
     }
     let command_args = new_command_args;
@@ -296,11 +297,11 @@ fn main() {
             i += 1;
             continue;
         }
-        current_command.push(&command_args[i]);
+        current_command.push(command_args[i].clone());
         i += 1;
     }
     // The remaining arguments are the arguments for the command.
-    let command_args = &command_args[i..];
+    let mut command_args = &command_args[i..];
 
     let separator_string = "[BREAK!]".to_string();
     let mut multi_args = BTreeMap::new();
@@ -310,6 +311,7 @@ fn main() {
     let mut positional_size = 0;
     let mut command_specific_args = Vec::new();
     let mut distributed_args = Vec::new();
+    let mut new_command_args;
     loop {
         if i >= command_args.len() {
             break;
@@ -328,6 +330,26 @@ fn main() {
             if specific_arg_idx != -1 {
                 arg = specific_arg.clone();
                 command_specific_args.push((specific_arg, specific_arg_idx));
+            }
+            if arg.contains("@") {
+                arg = arg.replace("@", "");
+                // Read arguments from file.
+                let file = match File::open(command_args[i+1].clone()) {
+                    Err(why) => panic!("couldn't open {}: {}", arg, why),
+                    Ok(file) => file,
+                };
+                let reader = BufReader::new(file);
+                let mut file_args = Vec::new();
+                for line in reader.lines() {
+                    file_args.push(line.unwrap());
+                }
+                // Add read arguments to command arguments.
+                new_command_args = [
+                    &command_args[..i],
+                    &file_args[..],
+                    &command_args[i+2..]
+                ].concat();
+                command_args = new_command_args.as_slice();
             }
             multi_args.insert(i, (arg.clone(), Vec::new()));
             let initial_j = i+1;
@@ -457,7 +479,6 @@ fn main() {
         for arg in command {
             print!("{} ", arg);
         }
-        println!();
 
         //// Remove all arguments from multi_args_values and
         //// positional_args_values that are in command_specific_args and whose
@@ -574,9 +595,12 @@ fn main() {
             }
         }
         if combinations.len() > 0 {
-            println!("Combinations ({}):", combinations.len());
+            println!("  # {} combinations", combinations.len());
             for combination in &combinations {
-                println!("  {:?}", combination);
+                for (key, value) in combination {
+                    print!("  {} {}", key, value.replace(&separator_string, " "));
+                }
+                println!();
             }
         } else {
             // Just run the command without any arguments.

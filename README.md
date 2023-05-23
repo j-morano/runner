@@ -165,6 +165,33 @@ preprocess.py --data-dirs Places Caltech-256
 # Again, these commands are run in parallel.
 ```
 
+## Read arguments from file
+
+You can indicate `runner` to read the arguments from a certain option from a file by using the character `@` after the dash or dashes (e.g., `-@o`, `--@option`). This option can be combined with Distributed arguments. In the file, each argument should be in a different line. For example:
+
+```sh
+runner preprocess.py -- --@data-dirs dirs
+
+# is equivalent to
+
+preprocess.py --data-dirs ImageNet
+preprocess.py --data-dirs Places
+preprocess.py --data-dirs Oxford102Flower
+preprocess.py --data-dirs CelebA
+preprocess.py --data-dirs Caltech-256
+```
+
+where the `dirs` file is like this:
+
+```text
+ImageNet
+CIFAR-10
+Places
+Oxford102Flower
+CelebA
+Caltech-256
+```
+
 
 ## Other options:
 
