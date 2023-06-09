@@ -590,6 +590,11 @@ fn main() {
             let mut this_comb = Vec::new();
             // Get comb length.
             for option in &options {
+                // Filter out empty argument values.
+                if comb[i].len() == 0 || comb[i] == " " {
+                    i += 1;
+                    continue;
+                }
                 this_comb.push((option.clone(), comb[i].clone()));
                 // Create string with all the option values separated by a comma.
                 option_values.push(comb[i].as_str());
