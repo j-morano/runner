@@ -198,3 +198,4 @@ Caltech-256
 - `--dry-runner`: Print the commands that would be executed without actually executing them.
 - `--runners`: Number of commands to run in parallel.
 - `--bg-runner`: Run the commands in the background.
+- `--runner-info`: Show only the information about the runner. Do not execute commands nor perform dry-run.

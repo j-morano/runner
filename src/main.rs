@@ -221,6 +221,7 @@ fn main() {
     let mut allow_combs = Vec::new();
     let mut allow = false;
     let mut parse_runners = false;
+    let mut info_only = false;
     for arg in command_args {
         if filter {
             if arg.starts_with("-") {
@@ -253,6 +254,8 @@ fn main() {
         }
         if arg == "--dry-runner" {
             dry_run = true;
+        } else if arg == "--runner-info" {
+            info_only = true;
         } else if arg == "--runners" {
             parse_runners = true;
         } else if arg == "--bg-runner" {
@@ -662,6 +665,10 @@ fn main() {
         combinations_sets.insert(command_index, (command.clone(), combinations));
         command_index += 1;
     } // end for command in commands
+
+    if info_only {
+        exit(0);
+    }
 
 
     //// Run the commands.
