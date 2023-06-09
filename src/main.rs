@@ -628,6 +628,13 @@ fn main() {
                     }
                 }
             }
+            // Ensure that there are no duplicate combinations.
+            for combination in &combinations {
+                if combination == &this_comb {
+                    match_found = true;
+                    break;
+                }
+            }
             if !match_found {
                 combinations.push(this_comb);
             }
