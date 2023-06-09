@@ -8,13 +8,17 @@ use std::fs::File;
 const HELP: &str = "\
 Usage: runner [option] <command> [--] <args>
 Options:
+    --allow-runs <combs>
+                        Allow only certain combinations of arguments.
     --bg-runner         Run the commands in the background.
+    --dry-runner        Print all the commands that would be executed without
+                          actually executing them.
     --filter-runs <combs>
                         Filter certain combinations of arguments.
     -h, --help          Print this help message.
-    --dry-runner        Print the commands that would be executed without
-                          actually executing them.
     --runners           Number of commands to run in parallel.
+    --runner-info       Print information about the runner execution (e.g.,
+                          the commands that are being executed) and exit.
     -v, --version       Print the version of runner.
 
 Exit status:
