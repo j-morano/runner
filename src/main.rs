@@ -2,7 +2,10 @@ use std::env;
 use std::collections::BTreeMap;
 use std::io::{ErrorKind, BufReader, BufRead, Write};
 use std::process::{Command, Stdio, Child, exit};
-use std::fs::File;
+use std::fs::{File, OpenOptions};
+use std::time::SystemTime;
+
+mod time_utils;
 
 
 const HELP: &str = "\
@@ -764,6 +767,23 @@ fn main() {
         for command in &failed_commands {
             println!("  $ {}", command);
         }
+        // Write failed commands to file. Append to file if it already exists.
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("runner_failed.log")
+            .unwrap();
+
+        // Convert to date
+        let now_str = time_utils::get_date_time_string(SystemTime::now());
+        file.write_all(now_str.as_bytes()).unwrap();
+        file.write_all("\n".as_bytes()).unwrap();
+
+        for command in &failed_commands {
+            file.write_all(command.as_bytes()).unwrap();
+            file.write_all("\n".as_bytes()).unwrap();
+        }
+        file.write_all("\n".as_bytes()).unwrap();
         exit(2);
     }
 }

@@ -199,3 +199,7 @@ Caltech-256
 - `--runners`: Number of commands to run in parallel.
 - `--bg-runner`: Run the commands in the background.
 - `--runner-info`: Show only the information about the runner. Do not execute commands nor perform dry-run.
+
+## Logging
+
+Failed commands are logged in the `runner_failed.log` file. You can change the name of the log file with the `--log-file` option.
