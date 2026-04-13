@@ -18,7 +18,7 @@ fn is_leap_year(year: i32) -> bool {
         }
         return true;
     }
-    return false;
+    false
 }
 
 
@@ -26,7 +26,7 @@ fn get_days_for_year(year: i32) -> i32 {
     if is_leap_year(year) {
         return 366;
     }
-    return 365;
+    365
 }
 
 

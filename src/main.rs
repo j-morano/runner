@@ -46,21 +46,13 @@ fn wait_for_child(child: &mut Child) -> bool {
     match child.try_wait() {
         Ok(Some(status)) => {
             println!("exited with: {status}");
-            if status.success() {
-                true
-            } else {
-                false
-            }
+            status.success()
         },
         Ok(None) => {
             println!("status not ready yet, let's really wait");
             let res = child.wait();
             println!("result: {res:?}");
-            if res.unwrap().success() {
-                true
-            } else {
-                false
-            }
+            res.unwrap().success()
         }
         Err(e) => {
             println!("error attempting to wait: {e}");
@@ -76,12 +68,12 @@ fn print_command(command_obj: &Command) -> String {
     let command_name = command_obj.get_program().to_str().unwrap();
     print!("$ {} ", command_name);
     command_string.push_str(command_name);
-    command_string.push_str(" ");
+    command_string.push(' ');
     for arg in command_obj.get_args() {
         let arg_str = arg.to_str().unwrap();
         print!("{} ", arg_str);
         command_string.push_str(arg_str);
-        command_string.push_str(" ");
+        command_string.push(' ');
     }
     println!();
     command_string
@@ -121,7 +113,7 @@ pub fn partial_cartesian<T: Clone>(a: Vec<Vec<T>>, b: &[T]) -> Vec<Vec<T>> {
 pub fn cartesian_product<T: Clone>(lists: &[Vec<T>]) -> Vec<Vec<T>> {
     match lists.split_first() {
         Some((first, rest)) => {
-            let init: Vec<Vec<T>> = first.iter().cloned().map(|n| vec![n.clone()]).collect();
+            let init: Vec<Vec<T>> = first.iter().map(|n| vec![n.clone()]).collect();
 
             rest.iter().cloned().fold(init, |vec, list| {
                 partial_cartesian(vec, &list)
@@ -195,7 +187,7 @@ fn get_specific_arg(arg: String) -> i32 {
             number.push(c);
         }
     }
-    return fail_result;
+    fail_result
 }
 
 
@@ -268,7 +260,7 @@ fn main() {
         } else if arg == "--bg-runner" {
             bg_run = true;
         } else if arg == "--filter-runs" {
-            filter = true; 
+            filter = true;
         } else if arg == "--allow-runs" {
             allow = true;
         } else {
@@ -380,13 +372,13 @@ fn main() {
             }
             multi_args.insert(i, (arg.clone(), Vec::new()));
             let initial_j = i+1;
-            for j in i+1..command_args.len() {
-                if !command_args[j].starts_with("-") {
+            for (j, command_arg) in command_args.iter().enumerate().skip(initial_j) {
+                if !command_arg.starts_with("-") {
                     // if contains a comma, then split and add to positional
                     // arguments.
-                    if command_args[j].contains(",") {
+                    if command_arg.contains(",") {
                         positional_args.insert(i, (arg.clone(), Vec::new()));
-                        let options: Vec<_> = command_args[j].split(",").collect();
+                        let options: Vec<_> = command_arg.split(",").collect();
                         if positional_size == 0 {
                             positional_size = options.len();
                         } else if positional_size != options.len() {
@@ -401,66 +393,61 @@ fn main() {
                         }
                         // Remove the added to multi_args.
                         multi_args.remove(&i);
-                    } else {
-                        if is_distributed {
-                            // Get modulo of j-initial_i and runners.
-                            let runner_idx = (j-initial_j) % runners;
-                            if use_temp_files {
-                                let mut temp_file_path = env::temp_dir();
-                                temp_file_path.push("distributed");
-                                // Create directory using temp_file_path
-                                std::fs::create_dir_all(temp_file_path.clone()).unwrap();
-                                temp_file_path.push(format!("{}", runner_idx));
-                                if !temp_file_path.exists() {
-                                    multi_args.get_mut(&i).unwrap().1.push(
-                                        temp_file_path.to_str().unwrap().to_string()
-                                    );
-                                }
-                                // Create file using temp_file_path
-                                let mut temp_file = std::fs::OpenOptions::new()
-                                    .write(true)
-                                    .create(true)
-                                    .append(true)
-                                    .open(temp_file_path.clone())
-                                    .unwrap();
-                                writeln!(temp_file, "{}", command_args[j]).unwrap();
-                            } else {
-                                // Add to the runner_idx-th string.
-                                let group = match multi_args.get_mut(&i).unwrap().1.get_mut(runner_idx) {
-                                    Some(group) => group,
-                                    None => {
-                                        multi_args.get_mut(&i).unwrap().1.push(empty_string.clone());
-                                        multi_args.get_mut(&i).unwrap().1.last_mut().unwrap()
-                                    }
-                                };
-                                if group == &empty_string {
-                                    *group = command_args[j].to_string();
-                                } else {
-                                    *group = format!(
-                                        "{}{}{}",
-                                        group,
-                                        separator_string,
-                                        command_args[j]
-                                    );
-                                }
+                    } else if is_distributed {
+                        // Get modulo of j-initial_i and runners.
+                        let runner_idx = (j-initial_j) % runners;
+                        if use_temp_files {
+                            let mut temp_file_path = env::temp_dir();
+                            temp_file_path.push("distributed");
+                            // Create directory using temp_file_path
+                            std::fs::create_dir_all(temp_file_path.clone()).unwrap();
+                            temp_file_path.push(format!("{}", runner_idx));
+                            if !temp_file_path.exists() {
+                                multi_args.get_mut(&i).unwrap().1.push(
+                                    temp_file_path.to_str().unwrap().to_string()
+                                );
                             }
+                            // Create file using temp_file_path
+                            let mut temp_file = std::fs::OpenOptions::new()
+                                .create(true)
+                                .append(true)
+                                .open(temp_file_path.clone())
+                                .unwrap();
+                            writeln!(temp_file, "{}", command_arg).unwrap();
                         } else {
-                            multi_args.get_mut(&i).unwrap().1.push(command_args[j].to_string());
+                            // Add to the runner_idx-th string.
+                            let group = match multi_args.get_mut(&i).unwrap().1.get_mut(runner_idx) {
+                                Some(group) => group,
+                                None => {
+                                    multi_args.get_mut(&i).unwrap().1.push(empty_string.clone());
+                                    multi_args.get_mut(&i).unwrap().1.last_mut().unwrap()
+                                }
+                            };
+                            if group == &empty_string {
+                                *group = command_arg.to_string();
+                            } else {
+                                *group = format!(
+                                    "{}{}{}",
+                                    group,
+                                    separator_string,
+                                    command_arg
+                                );
+                            }
                         }
+                    } else {
+                        multi_args.get_mut(&i).unwrap().1.push(command_arg.to_string());
                     }
                 } else {
                     i = j-1;
                     break;
                 }
             }
-        } else {
-            if i == 0 {
-                println!("First argument does not start with a dash.");
-                println!("=> Using all arguments as a single main argument.");
-                multi_args.insert(0, (empty_string.clone(), Vec::new()));
-                for j in 0..command_args.len() {
-                    multi_args.get_mut(&0).unwrap().1.push(command_args[j].to_string());
-                }
+        } else if i == 0 {
+            println!("First argument does not start with a dash.");
+            println!("=> Using all arguments as a single main argument.");
+            multi_args.insert(0, (empty_string.clone(), Vec::new()));
+            for ca in command_args.iter() {
+                multi_args.get_mut(&0).unwrap().1.push(ca.to_string());
             }
         }
         i += 1;
@@ -475,10 +462,10 @@ fn main() {
         println!();
     }
     // Pretty print multi_args.
-    for (_, value) in &multi_args {
+    for value in multi_args.values() {
         let current_arg = value.0.clone();
         let specific = command_specific_args.iter().find(|x| x.0 == current_arg);
-        let is_distributed = distributed_args.iter().find(|x| x.to_string() == current_arg) != None;
+        let is_distributed = distributed_args.contains(&current_arg);
         print!("  {}: {:?}", value.0, value.1);
         if let Some((_, num_commas)) = specific {
             print!(" (specific: {})", num_commas);
@@ -488,7 +475,7 @@ fn main() {
         }
         println!();
     }
-    for (_, value) in &positional_args {
+    for value in positional_args.values() {
         println!("  {}: {:?} (positional)", value.0, value.1);
     }
     println!();
@@ -496,14 +483,14 @@ fn main() {
     println!("Number of runners: {}", runners);
     println!();
 
-    if filter_combs.len() > 0 {
+    if !filter_combs.is_empty() {
         println!("Filter runs:");
         for comb in &filter_combs {
             println!("  \"{}\"", comb.join(","));
         }
         println!();
     }
-    if allow_combs.len() > 0 {
+    if !allow_combs.is_empty() {
         println!("Allow runs:");
         for comb in &allow_combs {
             println!("  \"{}\"", comb.join(","));
@@ -533,7 +520,7 @@ fn main() {
         //// number of commas is not equal to main_command_num.
         let mut multi_args_values = Vec::new();
         let mut positional_args_values = Vec::new();
-        for (_, value) in &multi_args {
+        for value in multi_args.values() {
             let mut skip = false;
             for (arg, num_commas) in &command_specific_args {
                 if &value.0 == arg {
@@ -546,14 +533,14 @@ fn main() {
             let values = &value.1.clone();
             // copy value.1 to values
             let values = values.clone();
-            if values.len() > 0 {
+            if !values.is_empty() {
                 multi_args_values.push(values);
                 options.push(value.0.clone());
             } else {
                 flags.push(value.0.clone());
             }
         }
-        for (_, value) in &positional_args {
+        for value in positional_args.values() {
             let mut skip = false;
             for (arg, num_commas) in &command_specific_args {
                 if &value.0 == arg {
@@ -566,7 +553,7 @@ fn main() {
             let values = &value.1.clone();
             // copy value.1 to values
             let values = values.clone();
-            if values.len() > 0 {
+            if !values.is_empty() {
                 positional_args_values.push(values);
                 options.push(value.0.clone());
             }
@@ -575,10 +562,10 @@ fn main() {
 
         let mut combs;
         combs = cartesian_product(&multi_args_values);
-        if positional_args_values.len() > 0 {
+        if !positional_args_values.is_empty() {
             let positional_combs = ordered_combinations(&positional_args_values);
             let mut new_combs = Vec::new();
-            if combs.len() == 0 {
+            if combs.is_empty() {
                 combs = positional_combs.clone();
             } else {
                 for comb in &combs {
@@ -601,7 +588,7 @@ fn main() {
             // Get comb length.
             for option in &options {
                 // Filter out empty argument values.
-                if comb[i].len() == 0 || comb[i] == " " {
+                if comb[i].is_empty() || comb[i] == " " {
                     i += 1;
                     continue;
                 }
@@ -618,7 +605,7 @@ fn main() {
                 // Check if all option values are in the filter combination.
                 match_found = filter_comb.iter()
                     .all(
-                        |x| option_values.contains(&&x)
+                        |x| option_values.contains(x)
                         );
                 if match_found {
                     break;
@@ -631,12 +618,12 @@ fn main() {
                 // Check if the first allow value is in the option values.
                 //   If so, then check if all option values are in the allow
                 //   combination.
-                let first_present = option_values.contains(&&allow_comb[0]);
+                let first_present = option_values.contains(&allow_comb[0]);
                 if first_present {
                     // Check if all option values are in the allow combination.
                     match_found = !allow_comb.iter()
                         .all(
-                            |x| option_values.contains(&&x)
+                            |x| option_values.contains(x)
                             );
                     if match_found {
                         break;
@@ -654,7 +641,7 @@ fn main() {
                 combinations.push(this_comb);
             }
         }
-        if combinations.len() > 0 {
+        if !combinations.is_empty() {
             println!("  # {} combinations", combinations.len());
             for combination in &combinations {
                 for (key, value) in combination {
@@ -762,7 +749,7 @@ fn main() {
             println!();
         }
     }
-    if failed_commands.len() > 0 {
+    if !failed_commands.is_empty() {
         println!("Failed commands ({}):", failed_commands.len());
         for command in &failed_commands {
             println!("  $ {}", command);
