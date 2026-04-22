@@ -49,9 +49,7 @@ fn wait_for_child(child: &mut Child) -> bool {
             status.success()
         },
         Ok(None) => {
-            println!("status not ready yet, let's really wait");
             let res = child.wait();
-            println!("result: {res:?}");
             res.unwrap().success()
         }
         Err(e) => {
